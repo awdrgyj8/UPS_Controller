@@ -2,7 +2,7 @@ import Api.PteroAPI as PteroAPI
 import Api.NutClient as NutClient
 import Api.AgentAPI as AgentAPI
 import Api.WakeOnLan as WakeOnLan
-import time, json
+import time, json, datetime
 
 if __name__ == "__main__":
     while True:
@@ -49,7 +49,7 @@ if __name__ == "__main__":
                 json.dump(data, f, indent=4)
         # 定時執行檢查UPS
         if data["AgentPowerState"] == True:
-            print("目前節點皆為開機狀態")
+            print(f"{datetime.datetime.now().strftime("%H:%M:%S")} 目前節點皆為開機狀態")
         else:
-            print("目前節點皆為關機狀態，正在持續檢測UPS狀態，若上電則開機節點")
+            print(f"{datetime.datetime.now().strftime("%H:%M:%S")} 目前節點皆為關機狀態，正在持續檢測UPS狀態，若上電則開機節點")
         time.sleep(30)
