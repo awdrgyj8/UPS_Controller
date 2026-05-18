@@ -60,6 +60,7 @@ def showStatus(upsSnapshot, expectedPowerState):
     )
     table.add_column("Agent", style="bold")
     table.add_column("IP")
+    table.add_column("Port")
     table.add_column("MAC")
     table.add_column("預期")
     table.add_column("連線")
@@ -77,6 +78,7 @@ def showStatus(upsSnapshot, expectedPowerState):
         table.add_row(
             status["name"],
             status["ip"],
+            status["port"],
             status["mac"],
             expectedLabel,
             connectionLabel,
@@ -87,7 +89,7 @@ def showStatus(upsSnapshot, expectedPowerState):
         )
 
     if len(statuses) == 0:
-        table.add_row("-", "-", "-", expectedLabel, "[yellow]Unknown[/yellow]", "-", "-", "-", "AgentInfo 未設定或沒有 Agent")
+        table.add_row("-", "-", "-", "-", expectedLabel, "[yellow]Unknown[/yellow]", "-", "-", "-", "AgentInfo 未設定或沒有 Agent")
 
     console.print(table)
 

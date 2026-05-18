@@ -39,10 +39,12 @@ def getAgentStatuses():
     statuses = []
     for index, agent in enumerate(agent_ips, start=1):
         ip = agent.get("ip", "")
+        port = agent.get("port")
         mac = agent.get("mac", "")
         status = {
             "name": agent.get("name", f"Agent {index}"),
             "ip": ip,
+            "port": str(port) if port is not None else "",
             "mac": mac,
             "online": False,
             "hostname": "",
@@ -55,10 +57,14 @@ def getAgentStatuses():
             status["error"] = "missing ip"
             statuses.append(status)
             continue
+        if port is None:
+            status["error"] = "missing port"
+            statuses.append(status)
+            continue
 
         started_at = time.monotonic()
         try:
-            response = requests.get(f"http://{ip}:5858/status", timeout=_AGENT_REQUEST_TIMEOUT)
+            response = requests.get(f"http://{ip}:{port}/status", timeout=_AGENT_REQUEST_TIMEOUT)
             status["latency_ms"] = round((time.monotonic() - started_at) * 1000)
             response_data = response.json()
             if response.status_code == 200 and response_data.get("ok") is True:
@@ -88,7 +94,11 @@ def sendAgentShutdownRequest():
             print(f"❌ AgentInfo 缺少 ip 欄位: {agent}")
             allAccepted = False
             continue
-        node_url = f"http://{agent['ip']}:5858/shutdown"
+        if "port" not in agent:
+            print(f"❌ AgentInfo 缺少 port 欄位: {agent}")
+            allAccepted = False
+            continue
+        node_url = f"http://{agent['ip']}:{agent['port']}/shutdown"
         data = _make_signed_payload()
         try:
             response = requests.post(node_url, json=data, timeout=_AGENT_REQUEST_TIMEOUT)
