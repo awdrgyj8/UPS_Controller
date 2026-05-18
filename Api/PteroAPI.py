@@ -1,13 +1,16 @@
 import requests
 import os
 import urllib3
+from pathlib import Path
 from typing import Literal, List
 from dotenv import load_dotenv
 urllib3.disable_warnings()
 
 # 讀取.env
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parents[1]
+load_dotenv(BASE_DIR / ".env")
 PteroApi_Url = os.getenv("PteroApi_Url")
+_REQUEST_TIMEOUT = 10
 
 # 初始化標頭檔
 _ApplicationHeaders = {
@@ -24,15 +27,18 @@ _ClientHeaders = {
 def getAllServerUUID():
     try:
         response = requests.get(
-            f"{PteroApi_Url}/api/application/servers", headers=_ApplicationHeaders, verify=False
+            f"{PteroApi_Url}/api/application/servers",
+            headers=_ApplicationHeaders,
+            verify=False,
+            timeout=_REQUEST_TIMEOUT,
         )
         response.raise_for_status()
         data = response.json().get("data", [])
         return [server["attributes"]["uuid"][:8] for server in data]
     except requests.exceptions.RequestException as e:
         print(f"Request failed: {e}")
-    except ValueError as e:
-        print(f"JSON decode error: {e}")
+    except (ValueError, KeyError) as e:
+        print(f"JSON format error: {e}")
     return []
 
 def sendPowerSignal(serverList: List[str], action: Literal["start", "stop", "restart", "kill"]):
@@ -43,6 +49,7 @@ def sendPowerSignal(serverList: List[str], action: Literal["start", "stop", "res
                 headers=_ClientHeaders,
                 json={"signal": action},
                 verify=False,
+                timeout=_REQUEST_TIMEOUT,
             )
             if response.status_code == 204:
                 print(f"✅ 已對 {serverID} 伺服器發送 '{action}' 發送成功。")
@@ -54,5 +61,15 @@ def sendPowerSignal(serverList: List[str], action: Literal["start", "stop", "res
             print(f"❌ 發送 {serverID} 電源訊號時發生錯誤: {e}")
 
 def getServerPowerState(serverUUID: str):
-    state_response = requests.get(f"{PteroApi_Url}/api/client/servers/{serverUUID}/resources", headers=_ClientHeaders, verify=False)
-    return(state_response.json()["attributes"]["current_state"]) # running offline stopping
+    try:
+        state_response = requests.get(
+            f"{PteroApi_Url}/api/client/servers/{serverUUID}/resources",
+            headers=_ClientHeaders,
+            verify=False,
+            timeout=_REQUEST_TIMEOUT,
+        )
+        state_response.raise_for_status()
+        return state_response.json()["attributes"]["current_state"] # running offline stopping
+    except (requests.exceptions.RequestException, ValueError, KeyError) as e:
+        print(f"❌ 取得 {serverUUID} 電源狀態時發生錯誤: {e}")
+        return "unknown"
