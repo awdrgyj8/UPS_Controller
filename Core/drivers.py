@@ -46,6 +46,10 @@ class RealDrivers:
         except (self._requests.exceptions.RequestException, ValueError, KeyError, TypeError) as e:
             raise DriverError(str(e)) from e
 
+    def ptero_info(self):
+        from Core.config import load_ptero_info
+        return load_ptero_info()
+
     def ptero_list_servers(self):
         return self._ptero_call(self.ptero.getAllServers)
 

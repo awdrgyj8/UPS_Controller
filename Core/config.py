@@ -1,4 +1,5 @@
 """Controller 設定：全部由環境變數（.env）與命令列參數決定。"""
+import json
 import os
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -79,3 +80,25 @@ def load_settings(simulate=None):
         settings.wol_interval = 0.2
         settings.console_table = False
     return settings
+
+
+def load_ptero_info():
+    """讀取 PteroInfo（每個 Pterodactyl node 跑在哪台 UPS_Agent 主機上），回傳 (清單, 錯誤訊息)。
+
+    格式：[{"node": node id 或名稱, "agent": AgentInfo 的 name 或 ip}, ...]
+    只用於拓撲圖與自檢；停電時一律停止面板上的全部伺服器，不受這份設定影響。
+    """
+    raw = os.getenv("PteroInfo")
+    if raw is None or raw.strip() == "":
+        return [], ""
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        return [], f"PteroInfo JSON 格式錯誤: {e}"
+    if not isinstance(data, list) or not all(isinstance(item, dict) for item in data):
+        return [], 'PteroInfo 必須是 JSON 陣列，例如 [{"node":1,"agent":"PVE"}]'
+    valid = [item for item in data if item.get("node") not in (None, "") and item.get("agent") not in (None, "")]
+    if len(valid) != len(data):
+        missing = [str(i) for i, item in enumerate(data, start=1) if item not in valid]
+        return valid, f"PteroInfo 第 {', '.join(missing)} 筆缺少 node 或 agent 欄位"
+    return valid, ""

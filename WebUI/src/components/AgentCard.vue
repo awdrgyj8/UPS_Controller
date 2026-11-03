@@ -18,6 +18,12 @@ const sys = computed(() => props.agent.system)
 const servers = computed(() => (s.value.ptero.servers || []).filter((server) => server.agent_index === props.agent.index))
 const sim = computed(() => (s.value.simulation?.agents || []).find((agent) => agent.index === props.agent.index))
 const isSim = computed(() => s.value.mode === 'simulation')
+const nodeLabels = computed(() =>
+  (props.agent.ptero_node_ids || []).map((id) => {
+    const node = (s.value.ptero.nodes || []).find((n) => n.id === id)
+    return node ? `#${id} ${node.name}` : `#${id}`
+  }),
+)
 const mismatch = computed(() => expected.value === true && !props.agent.online && sim.value?.power !== 'booting')
 
 const memUsed = computed(() => (sys.value?.memory ? sys.value.memory.total - sys.value.memory.available : null))
@@ -78,9 +84,11 @@ const meterLevel = (pct) => (pct === null ? 'neutral' : pct >= 90 ? 'critical' :
       <template v-if="sys">
         <dt>平台</dt><dd class="platform" :title="sys.platform">{{ sys.platform || '-' }}</dd>
       </template>
-      <template v-if="agent.ptero_node_id != null">
-        <dt>面板 node</dt><dd>#{{ agent.ptero_node_id }}</dd>
-      </template>
+      <dt>Pterodactyl node</dt>
+      <dd>
+        <template v-if="nodeLabels.length">{{ nodeLabels.join('、') }}</template>
+        <span v-else class="muted">未對應（可在 PteroInfo 設定）</span>
+      </dd>
     </dl>
 
     <div v-if="sys" class="resources">

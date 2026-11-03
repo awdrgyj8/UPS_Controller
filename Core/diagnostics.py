@@ -164,6 +164,21 @@ class DiagnosticsRunner:
         else:
             ctx.finish("fail", "PteroApi_Url / AppKey / ClientKey 未設定：停電時會因取不到伺服器清單而跳過節點關機")
 
+        ctx = self.check("config.ptero_info", "設定", "PteroInfo（Pterodactyl node 對應主機）")
+        ptero_info, error = self.drivers.ptero_info()
+        problems = [error] if error else []
+        names = {str(agent.get(key)) for agent in agents for key in ("name", "ip") if agent.get(key)}
+        problems += [f"agent「{entry['agent']}」不在 AgentInfo 裡" for entry in ptero_info if str(entry["agent"]) not in names]
+        legacy = [agent.get("name", agent.get("ip", "?")) for agent in agents if "ptero_node" in agent]
+        if problems:
+            ctx.finish("fail", "；".join(problems))
+        elif legacy:
+            ctx.finish("warn", f"AgentInfo 的 ptero_node 已不再使用（{'、'.join(legacy)}），請改寫到 PteroInfo")
+        elif ptero_info:
+            ctx.finish("pass", "、".join(f"node {entry['node']} → {entry['agent']}" for entry in ptero_info))
+        else:
+            ctx.finish("skip", "未設定，改用自動比對（node FQDN 等於 Agent IP / hostname，或名稱相同）")
+
         ctx = self.check("config.threshold", "設定", "關機電量門檻")
         if 10 <= threshold <= 95:
             ctx.finish("pass", f"電池供電且電量 ≤ {threshold}% 時啟動關機程序")
@@ -340,12 +355,22 @@ class DiagnosticsRunner:
         if not nodes:
             ctx.finish("skip", "沒有 node 資料")
         else:
-            from Core.controller import match_agent_node
-            mapped = {match_agent_node(agent, nodes) for agent in agents} - {None}
-            unmapped = [server["name"] for server in servers if server.get("node_id") not in mapped]
-            if unmapped:
-                ctx.finish("warn", f"{len(unmapped)} 台伺服器找不到對應 Agent（可在 AgentInfo 加上 ptero_node）："
-                                   + "、".join(unmapped[:8]))
+            from Core.controller import map_nodes_to_agents
+            ptero_info, _ = self.drivers.ptero_info()
+            mapping, problems = map_nodes_to_agents(agents, nodes, ptero_info)
+            agent_names = {agent["index"]: agent["name"] for agent in agents}
+            unmapped_nodes = [node for node in nodes if node["id"] not in mapping]
+            unmapped = [server["name"] for server in servers if server.get("node_id") not in mapping]
+            if problems or unmapped_nodes:
+                parts = list(problems)
+                if unmapped_nodes:
+                    parts.append("未對應的 node：" + "、".join(f"#{node['id']} {node['name']}" for node in unmapped_nodes)
+                                 + f"（{len(unmapped)} 台伺服器）。請在 PteroInfo 加上，例如 "
+                                 + f'{{"node":{unmapped_nodes[0]["id"]},"agent":"主機名稱"}}')
+                ctx.finish("warn", "；".join(parts))
+            elif nodes:
+                ctx.finish("pass", "、".join(f"#{node['id']} {node['name']} → {agent_names.get(mapping[node['id']], '?')}"
+                                            for node in nodes))
             else:
                 ctx.finish("pass", "所有伺服器都能對應到 Agent")
         return servers
