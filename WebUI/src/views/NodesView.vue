@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import AgentCard from '../components/AgentCard.vue'
 import StatusPill from '../components/StatusPill.vue'
 import Icon from '../components/Icon.vue'
-import { act, serverLevel, store } from '../store.js'
+import { act, serverStatus, store } from '../store.js'
 import { ago, bytes, duration, num } from '../format.js'
 
 const s = computed(() => store.state)
@@ -62,7 +62,10 @@ async function toggleStuck(server) {
               <td class="mono">{{ server.identifier }}</td>
               <td>{{ agentName(server.agent_index) }}</td>
               <td>#{{ server.node_id }} {{ server.node_name }}</td>
-              <td><StatusPill v-bind="serverLevel(server.state)" /></td>
+              <td>
+                <StatusPill v-bind="serverStatus(server)" />
+                <div v-if="serverStatus(server).assumed" class="muted assumed">面板回報 starting</div>
+              </td>
               <td class="num">{{ num(server.cpu_percent, 1, '%') }}</td>
               <td class="num">{{ bytes(server.memory_bytes) }}</td>
               <td class="num">{{ server.uptime_ms ? duration(server.uptime_ms / 1000, true) : '-' }}</td>
@@ -81,6 +84,10 @@ async function toggleStuck(server) {
 </template>
 
 <style scoped>
+.assumed {
+  font-size: 11px;
+  margin-top: 2px;
+}
 .toolbar {
   display: flex;
   align-items: center;

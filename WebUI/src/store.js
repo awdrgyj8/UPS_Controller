@@ -109,6 +109,19 @@ export function serverLevel(state) {
   return SERVER_STATES[state] || SERVER_STATES.unknown
 }
 
+// 面板回報 starting 但已運行超過 1 小時，視為運行中
+// （常見於面板偵測不到「啟動完成」訊息的程式，例如 Discord Bot）。只影響顯示，不影響關機流程。
+export const STARTING_AS_RUNNING_MS = 60 * 60 * 1000
+
+export function serverStatus(server) {
+  if (server.state === 'starting' && (server.uptime_ms || 0) >= STARTING_AS_RUNNING_MS) {
+    return { ...SERVER_STATES.running, assumed: true }
+  }
+  return { ...serverLevel(server.state), assumed: false }
+}
+
+export const isServerRunning = (server) => serverStatus(server).level === 'good'
+
 export function powerLevel(ups) {
   if (ups.ok !== true) return { level: 'critical', label: '無法讀取' }
   if (ups.power) return { level: 'good', label: '市電供電' }

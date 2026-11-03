@@ -4,7 +4,7 @@ import Icon from '../components/Icon.vue'
 import StatusPill from '../components/StatusPill.vue'
 import TopologyGraph from '../components/TopologyGraph.vue'
 import AgentCard from '../components/AgentCard.vue'
-import { PHASE_LEVEL, powerLevel, serverLevel, store } from '../store.js'
+import { PHASE_LEVEL, isServerRunning, powerLevel, serverStatus, store } from '../store.js'
 import { ago, bytes, clock, duration, num } from '../format.js'
 
 const s = computed(() => store.state)
@@ -125,7 +125,7 @@ const settings = computed(() => s.value.settings)
           <dl class="kv">
             <dt>URL</dt><dd class="mono small">{{ s.ptero.url || '-' }}</dd>
             <dt>Node</dt><dd>{{ s.ptero.nodes.length }} 個</dd>
-            <dt>伺服器</dt><dd>{{ s.ptero.servers.length }} 台（運行 {{ s.ptero.servers.filter((x) => x.state === 'running').length }}）</dd>
+            <dt>伺服器</dt><dd>{{ s.ptero.servers.length }} 台（運行 {{ s.ptero.servers.filter(isServerRunning).length }}）</dd>
             <dt>最後更新</dt><dd>{{ ago(s.ptero.updated_at, store.now) }}</dd>
           </dl>
           <div v-if="s.ptero.error" class="notice critical">{{ s.ptero.error }}</div>
@@ -141,7 +141,11 @@ const settings = computed(() => s.value.settings)
         <!-- 遊戲伺服器 -->
         <template v-else-if="server">
           <h3><Icon name="game" />{{ server.name }}</h3>
-          <StatusPill v-bind="serverLevel(server.state)" />
+          <StatusPill v-bind="serverStatus(server)" />
+          <p v-if="serverStatus(server).assumed" class="hint">
+            面板回報為 starting（啟動中），但已運行超過 1 小時，視為運行中。通常是面板偵測不到啟動完成的訊息，
+            可在面板的 Startup 設定調整「啟動完成」的判斷字串。
+          </p>
           <dl class="kv">
             <dt>Identifier</dt><dd class="mono">{{ server.identifier }}</dd>
             <dt>UUID</dt><dd class="mono small">{{ server.uuid }}</dd>

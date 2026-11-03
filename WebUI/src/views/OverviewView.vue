@@ -8,7 +8,7 @@ import FlowStepper from '../components/FlowStepper.vue'
 import LineChart from '../components/LineChart.vue'
 import EventList from '../components/EventList.vue'
 import StatusPill from '../components/StatusPill.vue'
-import { agentLevel, batteryLevel, powerLevel, store } from '../store.js'
+import { agentLevel, batteryLevel, isServerRunning, powerLevel, store } from '../store.js'
 import { duration, num } from '../format.js'
 
 const s = computed(() => store.state)
@@ -19,7 +19,7 @@ const power = computed(() => powerLevel(ups.value))
 const agents = computed(() => s.value.agents)
 const online = computed(() => agents.value.filter((a) => a.online).length)
 const servers = computed(() => s.value.ptero.servers || [])
-const running = computed(() => servers.value.filter((x) => x.state === 'running').length)
+const running = computed(() => servers.value.filter(isServerRunning).length)
 const expected = computed(() => s.value.controller.expected_power_state)
 const nodesLevel = computed(() => {
   if (!agents.value.length) return 'neutral'
@@ -114,7 +114,7 @@ const events = computed(() => [...(s.value.events || [])].reverse().slice(0, 10)
                   <td><StatusPill v-bind="agentLevel(agent, expected)" /></td>
                   <td class="mono">{{ agent.ip }}:{{ agent.port }}</td>
                   <td class="num">{{ agent.latency_ms != null ? agent.latency_ms + ' ms' : '-' }}</td>
-                  <td class="num">{{ servers.filter((x) => x.agent_index === agent.index && x.state === 'running').length }} / {{ (agent.servers || []).length }}</td>
+                  <td class="num">{{ servers.filter((x) => x.agent_index === agent.index && isServerRunning(x)).length }} / {{ (agent.servers || []).length }}</td>
                   <td class="num">{{ duration(agent.system?.uptime_seconds, true) }}</td>
                 </tr>
               </tbody>
