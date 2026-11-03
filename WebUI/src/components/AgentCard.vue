@@ -87,7 +87,7 @@ const meterLevel = (pct) => (pct === null ? 'neutral' : pct >= 90 ? 'critical' :
       <dt>Pterodactyl node</dt>
       <dd>
         <template v-if="nodeLabels.length">{{ nodeLabels.join('、') }}</template>
-        <span v-else class="muted">未對應（可在 AgentInfo 設定 ptero_node）</span>
+        <span v-else class="muted">未對應（可在 PteroInfo 設定）</span>
       </dd>
     </dl>
 

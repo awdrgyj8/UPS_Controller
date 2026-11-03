@@ -1,7 +1,7 @@
 """控制流程測試：以模擬環境執行與實機相同的控制程式碼。"""
 import pytest
 
-from Core.controller import decide, match_agent_nodes
+from Core.controller import decide, map_nodes_to_agents
 
 
 @pytest.mark.parametrize("snapshot, expected_on, action", [
@@ -17,29 +17,51 @@ def test_decide_matches_original_logic(snapshot, expected_on, action):
     assert decide(snapshot, expected_on, 50) == action
 
 
-def test_match_agent_nodes_prefers_explicit_setting():
-    nodes = [{"id": 1, "name": "wings-a", "fqdn": "10.0.0.1"}, {"id": 2, "name": "wings-b", "fqdn": "b.example.com"},
-             {"id": 3, "name": "wings-c", "fqdn": "c.example.com"}]
-    assert match_agent_nodes({"ip": "10.0.0.1", "ptero_node": "wings-b"}, nodes) == [2]
-    assert match_agent_nodes({"ip": "10.0.0.1", "ptero_node": 3}, nodes) == [3]
-    assert match_agent_nodes({"ip": "10.0.0.1"}, nodes) == [1]
-    assert match_agent_nodes({"ip": "10.0.0.9", "hostname": "b.example.com"}, nodes) == [2]
-    assert match_agent_nodes({"ip": "10.0.0.9", "name": "other"}, nodes) == []
+NODES = [{"id": 1, "name": "PVE-Ubuntu", "fqdn": "vm.example.com"},
+         {"id": 3, "name": "Server-SystemSSD", "fqdn": "a.example.com"},
+         {"id": 4, "name": "Server-External-SSD", "fqdn": "192.168.50.230"}]
+AGENTS = [{"index": 1, "name": "Server", "ip": "192.168.50.230"}, {"index": 2, "name": "PVE", "ip": "192.168.50.250"}]
 
 
-def test_one_host_with_multiple_ptero_nodes():
-    nodes = [{"id": 3, "name": "Server-SystemSSD", "fqdn": "a.example.com"},
-             {"id": 4, "name": "Server-External-SSD", "fqdn": "b.example.com"}]
-    assert match_agent_nodes({"ip": "192.168.50.230", "ptero_node": [3, 4]}, nodes) == [3, 4]
-    assert match_agent_nodes({"ip": "192.168.50.230", "ptero_node": ["Server-SystemSSD", 4]}, nodes) == [3, 4]
+def test_ptero_info_maps_nodes_to_hosts():
+    info = [{"node": 3, "agent": "Server"}, {"node": "PVE-Ubuntu", "agent": "192.168.50.250"}]
+    mapping, problems = map_nodes_to_agents(AGENTS, NODES, info)
+    # node 4 沒寫在 PteroInfo，但 fqdn 等於 Server 的 IP，自動對應
+    assert mapping == {3: 1, 1: 2, 4: 1}
+    assert problems == []
+
+
+def test_ptero_info_reports_unknown_references():
+    info = [{"node": 9, "agent": "Server"}, {"node": 3, "agent": "Nope"}]
+    mapping, problems = map_nodes_to_agents(AGENTS, NODES, info)
+    assert mapping == {4: 1}
+    assert len(problems) == 2
+
+
+def test_load_ptero_info(monkeypatch):
+    from Core.config import load_ptero_info
+    monkeypatch.setenv("PteroInfo", '[{"node":1,"agent":"PVE"},{"node":2}]')
+    entries, error = load_ptero_info()
+    assert entries == [{"node": 1, "agent": "PVE"}]
+    assert "第 2 筆" in error
+    monkeypatch.setenv("PteroInfo", "not json")
+    assert load_ptero_info()[1].startswith("PteroInfo JSON")
+    monkeypatch.delenv("PteroInfo")
+    assert load_ptero_info() == ([], "")
+
+
+def test_link_topology_uses_ptero_info(harness, monkeypatch):
+    harness.drivers.ptero_info = lambda: ([{"node": 3, "agent": "Server"}, {"node": 4, "agent": "Server"},
+                                          {"node": 1, "agent": "PVE"}], "")
     data = {
-        "agents": [{"index": 1, "ip": "192.168.50.230", "ptero_node": [3, 4]}],
-        "ptero": {"nodes": nodes, "servers": [{"identifier": "aaa", "node_id": 3}, {"identifier": "bbb", "node_id": 4}]},
+        "agents": [dict(agent) for agent in AGENTS],
+        "ptero": {"nodes": NODES, "servers": [{"identifier": "aaa", "node_id": 3}, {"identifier": "bbb", "node_id": 4},
+                                              {"identifier": "ccc", "node_id": 1}]},
     }
-    from Core.controller import ControllerService
-    ControllerService._link_topology(data)
+    harness.service._link_topology(data)
     assert data["agents"][0]["servers"] == ["aaa", "bbb"]
-    assert [server["agent_index"] for server in data["ptero"]["servers"]] == [1, 1]
+    assert data["agents"][0]["ptero_node_ids"] == [3, 4]
+    assert data["agents"][1]["servers"] == ["ccc"]
 
 
 def test_normal_power_keeps_nodes_on(harness):

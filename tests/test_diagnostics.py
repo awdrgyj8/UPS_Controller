@@ -4,7 +4,7 @@ from Core.scenarios import ScenarioRunner
 def test_selftest_passes_on_healthy_simulation(harness):
     harness.service.refresh_status()
     result = harness.diagnostics.run_sync("selftest")
-    failures = [r for r in result["results"] if r["status"] not in ("pass",)]
+    failures = [r for r in result["results"] if r["status"] not in ("pass", "skip")]
     assert failures == []
     assert result["summary"]["pass"] >= 20
 

@@ -420,6 +420,10 @@ class SimDrivers:
     def ptero_url(self):
         return os.getenv("PteroApi_Url") or "https://panel.example.com"
 
+    def ptero_info(self):
+        # 模擬的 node 與 Agent 一對一且 fqdn = Agent IP，自動比對即可；不讀取實機的 PteroInfo
+        return [], ""
+
     def _require_panel(self):
         if not self.env.ptero_reachable:
             raise DriverError("[模擬] Pterodactyl 面板無法連線 (502 Bad Gateway)")

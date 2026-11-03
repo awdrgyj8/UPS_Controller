@@ -48,23 +48,34 @@ def decide(snapshot, expected_on, threshold):
     return "hold_off"
 
 
-def match_agent_nodes(agent, nodes):
-    """把 Agent 對應到 Pterodactyl node，回傳 node id 清單（一台主機可以有多個 node）。
+def map_nodes_to_agents(agents, nodes, ptero_info):
+    """決定每個 Pterodactyl node 跑在哪台 Agent 主機上，回傳 ({node id: agent index}, 設定問題清單)。
 
-    優先使用 AgentInfo 的 ptero_node（可填單一值或陣列，id 或名稱皆可），
-    沒有設定時比對 node 的 fqdn 是否等於 Agent 的 ip / hostname，最後比對名稱。
+    先套用 PteroInfo（node 填 id 或名稱，agent 填 AgentInfo 的 name 或 ip）；
+    沒寫在 PteroInfo 的 node 再自動比對：node fqdn 等於 Agent 的 ip / hostname，其次名稱相同。
     """
-    refs = agent.get("ptero_node")
-    if refs not in (None, "", []):
-        if not isinstance(refs, list):
-            refs = [refs]
-        refs = {str(ref) for ref in refs}
-        return [node["id"] for node in nodes if str(node["id"]) in refs or node["name"] in refs]
-    candidates = {agent.get("ip"), agent.get("hostname")} - {None, ""}
-    matched = [node["id"] for node in nodes if node.get("fqdn") and node["fqdn"] in candidates]
-    if matched:
-        return matched
-    return [node["id"] for node in nodes if node.get("name") and node["name"] == agent.get("name")]
+    indexed = [(agent.get("index", position), agent) for position, agent in enumerate(agents, start=1)]
+    mapping = {}
+    problems = []
+    for entry in ptero_info:
+        node_ref = str(entry.get("node"))
+        agent_ref = str(entry.get("agent"))
+        node = next((n for n in nodes if str(n["id"]) == node_ref or n.get("name") == node_ref), None)
+        agent_index = next((i for i, a in indexed if a.get("name") == agent_ref or a.get("ip") == agent_ref), None)
+        if node is None:
+            problems.append(f"找不到 Pterodactyl node「{node_ref}」")
+        elif agent_index is None:
+            problems.append(f"找不到 Agent「{agent_ref}」（請填 AgentInfo 的 name 或 ip）")
+        else:
+            mapping[node["id"]] = agent_index
+    for node in nodes:
+        if node["id"] in mapping:
+            continue
+        by_fqdn = [i for i, a in indexed if node.get("fqdn") and node["fqdn"] in {a.get("ip"), a.get("hostname")}]
+        by_name = [i for i, a in indexed if node.get("name") and node["name"] == a.get("name")]
+        if by_fqdn or by_name:
+            mapping[node["id"]] = (by_fqdn or by_name)[0]
+    return mapping, problems
 
 
 class PowerStateStore:
@@ -258,7 +269,6 @@ class ControllerService:
         for index, (config, status) in enumerate(zip(configs, statuses), start=1):
             old = previous.get(index)
             status["index"] = index
-            status["ptero_node"] = config.get("ptero_node")
             status["checked_at"] = now
             status["last_seen"] = now if status["online"] else (old or {}).get("last_seen")
             status["mac_valid"] = self.drivers.valid_mac(status["mac"])
@@ -320,23 +330,18 @@ class ControllerService:
 
         self.state.mutate(apply)
 
-    @staticmethod
-    def _link_topology(data):
-        """把 Agent 與 Pterodactyl node / 伺服器互相對應，供拓撲圖使用。"""
+    def _link_topology(self, data):
+        """依 PteroInfo / 自動比對，把 Pterodactyl node 與伺服器掛到對應的 Agent 主機下，供拓撲圖使用。"""
+        ptero_info, _ = self.drivers.ptero_info()
         nodes = data["ptero"].get("nodes") or []
-        servers = data["ptero"].get("servers") or []
-        node_to_agent = {}
-        for agent in data["agents"]:
-            node_ids = match_agent_nodes(agent, nodes)
-            agent["ptero_node_ids"] = node_ids
-            for node_id in node_ids:
-                node_to_agent[node_id] = agent["index"]
-        for agent in data["agents"]:
-            agent["servers"] = []
+        mapping, _ = map_nodes_to_agents(data["agents"], nodes, ptero_info)
         by_index = {agent["index"]: agent for agent in data["agents"]}
-        for server in servers:
-            server["agent_index"] = node_to_agent.get(server.get("node_id"))
-            if server["agent_index"] is not None:
+        for agent in data["agents"]:
+            agent["ptero_node_ids"] = [node_id for node_id, index in mapping.items() if index == agent["index"]]
+            agent["servers"] = []
+        for server in data["ptero"].get("servers") or []:
+            server["agent_index"] = mapping.get(server.get("node_id"))
+            if server["agent_index"] in by_index:
                 by_index[server["agent_index"]]["servers"].append(server["identifier"])
 
     def _update_server_state(self, identifier, server_state):

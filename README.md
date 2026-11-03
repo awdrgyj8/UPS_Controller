@@ -20,6 +20,17 @@ uv run main.py --no-web        # 只執行控制迴圈（與舊版相同）
 uv run main.py --host 0.0.0.0 --port 8080
 ```
 
+### AgentInfo 與 PteroInfo
+
+- `AgentInfo`：每台裝了 UPS_Agent 的實體主機（name / ip / port / mac）。停電關機與復電 WOL 都依照這份清單。
+- `PteroInfo`（選填）：每個 Pterodactyl node 跑在哪台主機上，只用於拓撲圖與自檢，不影響關機流程。
+  一台主機可以有多個 node；跑在 VM 裡的 node 填它所在的實體主機。沒列出的 node 會用 FQDN = Agent IP 自動比對。
+
+```
+AgentInfo=[{"name":"Server-A","ip":"192.168.50.230","mac":"AA:BB:CC:DD:EE:01","port":5858},{"name":"PVE","ip":"192.168.50.250","mac":"AA:BB:CC:DD:EE:02","port":5858}]
+PteroInfo=[{"node":3,"agent":"Server-A"},{"node":4,"agent":"Server-A"},{"node":1,"agent":"PVE"}]
+```
+
 > 對外開放介面時請設定 `WEB_TOKEN`，否則同網段任何人都能操作暫停控制、WOL 等功能。
 
 ## 網頁介面
