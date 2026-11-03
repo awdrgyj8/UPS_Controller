@@ -340,12 +340,18 @@ class DiagnosticsRunner:
         if not nodes:
             ctx.finish("skip", "沒有 node 資料")
         else:
-            from Core.controller import match_agent_node
-            mapped = {match_agent_node(agent, nodes) for agent in agents} - {None}
+            from Core.controller import match_agent_nodes
+            node_names = {node["id"]: node["name"] for node in nodes}
+            for server in servers:
+                server.setdefault("node_name", node_names.get(server.get("node_id"), ""))
+            mapped = {node_id for agent in agents for node_id in match_agent_nodes(agent, nodes)}
             unmapped = [server["name"] for server in servers if server.get("node_id") not in mapped]
             if unmapped:
-                ctx.finish("warn", f"{len(unmapped)} 台伺服器找不到對應 Agent（可在 AgentInfo 加上 ptero_node）："
-                                   + "、".join(unmapped[:8]))
+                names = sorted({server.get("node_name") or f"#{server.get('node_id')}" for server in servers
+                                if server.get("node_id") not in mapped})
+                ctx.finish("warn", f"{len(unmapped)} 台伺服器找不到對應 Agent，未對應的 node：{'、'.join(names)}。"
+                                   "請在 AgentInfo 該主機加上 ptero_node（多個 node 可填陣列，例如 [3, 4]）："
+                                   + "、".join(unmapped[:8]) + ("…" if len(unmapped) > 8 else ""))
             else:
                 ctx.finish("pass", "所有伺服器都能對應到 Agent")
         return servers

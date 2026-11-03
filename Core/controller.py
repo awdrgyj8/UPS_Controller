@@ -48,21 +48,23 @@ def decide(snapshot, expected_on, threshold):
     return "hold_off"
 
 
-def match_agent_node(agent, nodes):
-    """把 Agent 對應到 Pterodactyl node：優先使用 AgentInfo 的 ptero_node，其次比對 fqdn / 名稱。"""
-    ref = agent.get("ptero_node")
-    if ref not in (None, ""):
-        for node in nodes:
-            if str(node["id"]) == str(ref) or node["name"] == str(ref):
-                return node["id"]
+def match_agent_nodes(agent, nodes):
+    """把 Agent 對應到 Pterodactyl node，回傳 node id 清單（一台主機可以有多個 node）。
+
+    優先使用 AgentInfo 的 ptero_node（可填單一值或陣列，id 或名稱皆可），
+    沒有設定時比對 node 的 fqdn 是否等於 Agent 的 ip / hostname，最後比對名稱。
+    """
+    refs = agent.get("ptero_node")
+    if refs not in (None, "", []):
+        if not isinstance(refs, list):
+            refs = [refs]
+        refs = {str(ref) for ref in refs}
+        return [node["id"] for node in nodes if str(node["id"]) in refs or node["name"] in refs]
     candidates = {agent.get("ip"), agent.get("hostname")} - {None, ""}
-    for node in nodes:
-        if node.get("fqdn") and node["fqdn"] in candidates:
-            return node["id"]
-    for node in nodes:
-        if node.get("name") and node["name"] == agent.get("name"):
-            return node["id"]
-    return None
+    matched = [node["id"] for node in nodes if node.get("fqdn") and node["fqdn"] in candidates]
+    if matched:
+        return matched
+    return [node["id"] for node in nodes if node.get("name") and node["name"] == agent.get("name")]
 
 
 class PowerStateStore:
@@ -325,9 +327,9 @@ class ControllerService:
         servers = data["ptero"].get("servers") or []
         node_to_agent = {}
         for agent in data["agents"]:
-            node_id = match_agent_node(agent, nodes)
-            agent["ptero_node_id"] = node_id
-            if node_id is not None:
+            node_ids = match_agent_nodes(agent, nodes)
+            agent["ptero_node_ids"] = node_ids
+            for node_id in node_ids:
                 node_to_agent[node_id] = agent["index"]
         for agent in data["agents"]:
             agent["servers"] = []
