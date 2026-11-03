@@ -23,7 +23,7 @@ def test_selftest_reports_failures(harness):
 def test_drill_has_no_side_effects(harness):
     result = harness.diagnostics.run_sync("drill")
     assert result["summary"].get("fail", 0) == 0
-    assert all(server.state == "running" for server in harness.env.servers)
+    assert all(server.state in ("running", "starting") for server in harness.env.servers)
     assert all(agent.power == "on" and agent.shutdown_requests == 0 for agent in harness.env.agents)
     assert harness.env.wol_packets == 0
     assert any(r["dry_run"] for r in result["results"])

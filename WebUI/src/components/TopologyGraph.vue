@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import Icon from './Icon.vue'
-import { PHASE_LEVEL, agentLevel, powerLevel, serverLevel, store } from '../store.js'
+import { PHASE_LEVEL, agentLevel, isServerRunning, powerLevel, serverStatus, store } from '../store.js'
 
 const props = defineProps({
   state: { type: Object, required: true },
@@ -124,7 +124,7 @@ const agentNodes = computed(() => {
   const n = columns.value || 1
   const nodes = agents.value.map((agent, i) => {
     const hosted = servers.value.filter((server) => server.agent_index === agent.index)
-    const running = hosted.filter((server) => server.state === 'running').length
+    const running = hosted.filter(isServerRunning).length
     return {
       id: `agent-${agent.index}`,
       agent,
@@ -236,7 +236,7 @@ const pills = computed(() => {
         server,
         x: node.x,
         y: ROW_C.value + i * (PILL_H + PILL_GAP),
-        status: serverLevel(server.state),
+        status: serverStatus(server),
         parentX: node.x + 14,
         parentY: node.y + NODE_H,
       })
@@ -283,6 +283,7 @@ function select(id) {
         <g transform="translate(19,18)" class="icon"><Icon :name="node.icon" :size="18" /></g>
         <text x="52" y="24" class="title">{{ fit(node.title, 15) }}</text>
         <text x="52" y="42" class="sub">{{ fit(node.sub, compact && node.agent ? 22 : 19) }}</text>
+        <circle cx="56" cy="60" r="8.5" class="halo" />
         <circle cx="56" cy="60" r="4.5" class="sdot" />
         <text x="66" y="64" class="stext">{{ fit(node.status.label, 17) }}</text>
       </g>
@@ -292,6 +293,7 @@ function select(id) {
          :transform="`translate(${pill.x + 22},${pill.y})`" tabindex="0" role="button" :data-node="pill.id"
          :aria-label="`${pill.server.name}：${pill.status.label}`" @click="select(pill.id)" @keydown.enter="select(pill.id)">
         <rect :width="NODE_W - 22" :height="PILL_H" rx="12" class="pill-box" />
+        <circle cx="13" :cy="PILL_H / 2" r="7.5" class="halo" />
         <circle cx="13" :cy="PILL_H / 2" r="4" class="sdot" />
         <text x="23" :y="PILL_H / 2 + 4" class="pill-name">{{ fit(pill.server.name, 13) }}</text>
         <text :x="NODE_W - 30" :y="PILL_H / 2 + 4" text-anchor="end" class="pill-state">{{ pill.status.label }}</text>
@@ -352,6 +354,22 @@ svg {
   font-size: 11.5px;
   fill: var(--text);
   font-weight: 500;
+}
+.halo {
+  fill: var(--c);
+  opacity: 0.28;
+}
+.neutral .halo {
+  opacity: 0;
+}
+.warning .halo {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% { opacity: 0.05; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .warning .halo { animation: none; }
 }
 .good { --c: var(--good); }
 .warning { --c: var(--warning); }
@@ -420,7 +438,6 @@ svg {
 /* 伺服器 */
 .pill {
   cursor: pointer;
-  --c: var(--neutral);
 }
 .pill:focus {
   outline: none;
@@ -443,6 +460,6 @@ svg {
 }
 .pill-state {
   font-size: 10.5px;
-  fill: var(--muted);
+  fill: var(--text-2);
 }
 </style>

@@ -95,7 +95,9 @@ class SimAgent:
 
 
 class SimServer:
-    def __init__(self, agent_index, name):
+    def __init__(self, agent_index, name, stays_starting=False):
+        # stays_starting：模擬面板偵測不到「啟動完成」訊息的程式（例如 Discord Bot），狀態會一直停在 starting
+        self.stays_starting = stays_starting
         self.uuid = str(uuid.uuid4())
         self.identifier = self.uuid[:8]
         self.name = name
@@ -104,10 +106,11 @@ class SimServer:
         self.reset()
 
     def reset(self):
-        self.state = "running"       # running / stopping / offline / starting
+        self.state = "starting" if self.stays_starting else "running"   # running / stopping / offline / starting
         self.stuck = False
         self.timer = 0.0
-        self.started_at = time.time() - random.randint(600, 86400)
+        self.started_at = time.time() - (random.randint(7200, 86400 * 60) if self.stays_starting
+                                         else random.randint(600, 86400))
 
     def to_dict(self):
         return {
@@ -135,6 +138,8 @@ class SimEnvironment:
             for _ in range(random.choice([2, 3])):
                 name = names.pop() if names else f"Server {len(self.servers) + 1}"
                 self.servers.append(SimServer(agent.index, name))
+        if self.agents:
+            self.servers.append(SimServer(self.agents[0].index, "Discord Bot", stays_starting=True))
         self.serial = f"SIM{random.randint(100000, 999999)}"
         self.reset()
         self._stop = threading.Event()
@@ -227,7 +232,7 @@ class SimEnvironment:
                     server.state = "offline"
                     continue
                 if server.state in ("stopping", "starting"):
-                    if server.stuck:
+                    if server.stuck or (server.state == "starting" and server.stays_starting):
                         continue
                     server.timer -= dt
                     if server.timer <= 0:
@@ -453,7 +458,7 @@ class SimDrivers:
         self._require_panel()
         with self.env._lock:
             server = self.env._server(identifier)
-            running = server.state == "running"
+            running = server.state in ("running", "starting")
             return {
                 "state": server.state,
                 "cpu_percent": round(random.uniform(5, 60), 1) if running else 0,
@@ -473,6 +478,7 @@ class SimDrivers:
             elif action == "start" and server.state == "offline" and host.power == "on":
                 server.state = "starting"
                 server.timer = random.uniform(2, 4)
+                server.started_at = time.time()
         self.env._log("success", f"✅ [模擬] 已對 {identifier} 伺服器發送 '{action}'")
         return True
 

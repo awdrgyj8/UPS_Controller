@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import Icon from './Icon.vue'
 import Meter from './Meter.vue'
 import StatusPill from './StatusPill.vue'
-import { act, agentLevel, serverLevel, store } from '../store.js'
+import { act, agentLevel, serverStatus, store } from '../store.js'
 import { ago, bytes, duration } from '../format.js'
 
 const props = defineProps({
@@ -115,11 +115,11 @@ const meterLevel = (pct) => (pct === null ? 'neutral' : pct >= 90 ? 'critical' :
       <h4 class="section-title">遊戲伺服器（{{ servers.length }}）</h4>
       <ul>
         <li v-for="server in servers" :key="server.identifier">
-          <span class="sdot" :class="serverLevel(server.state).level"></span>
+          <span class="sdot" :class="serverStatus(server).level"></span>
           <span class="sname">{{ server.name }}</span>
           <span class="muted mono small">{{ server.identifier }}</span>
           <span class="spacer"></span>
-          <span class="small secondary">{{ serverLevel(server.state).label }}</span>
+          <span class="small secondary">{{ serverStatus(server).label }}</span>
         </li>
       </ul>
     </div>
@@ -236,9 +236,9 @@ h3 {
   flex: none;
   background: var(--neutral);
 }
-.sdot.good { background: var(--good); }
-.sdot.warning { background: var(--warning); }
-.sdot.critical { background: var(--critical); }
+.sdot.good { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 28%, transparent); }
+.sdot.warning { background: var(--warning); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 28%, transparent); }
+.sdot.critical { background: var(--critical); box-shadow: 0 0 0 3px color-mix(in srgb, var(--critical) 28%, transparent); }
 .sname {
   white-space: nowrap;
   overflow: hidden;
