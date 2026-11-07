@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import Icon from './Icon.vue'
-import { PHASE_LEVEL, agentLevel, isServerRunning, powerLevel, serverStatus, store } from '../store.js'
+import { PHASE_LEVEL, agentLevel, isServerRunning, powerLevel, serverStatus, store, wattsText } from '../store.js'
 
 const props = defineProps({
   state: { type: Object, required: true },
@@ -104,7 +104,9 @@ const topNodes = computed(() => {
     },
     {
       id: 'ups', x: left, y: ROW_1, icon: 'battery', title: vars['ups.model'] || vars['device.model'] || 'UPS',
-      sub: ups.ok ? `電量 ${ups.battery ?? '-'}% · 負載 ${ups.load ?? '-'}%` : '無資料',
+      sub: ups.ok
+        ? `電量 ${ups.battery ?? '-'}% · ${ups.realpower != null ? wattsText(ups) : `負載 ${ups.load ?? '-'}%`}`
+        : '無資料',
       status: powerLevel(ups),
     },
     {

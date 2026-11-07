@@ -48,6 +48,28 @@ def decide(snapshot, expected_on, threshold):
     return "hold_off"
 
 
+def estimate_realpower(variables, nominal_override=0):
+    """UPS 輸出功率（瓦）。
+
+    有 ups.realpower 就直接使用；沒有的話（例如 CyberPower）以 ups.load(%) × 額定功率估算，
+    額定功率優先用 UPS_REALPOWER_NOMINAL，否則用 UPS 回報的 ups.realpower.nominal。
+    """
+    def number(key):
+        try:
+            return float(variables[key])
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    nominal = float(nominal_override) if nominal_override else number("ups.realpower.nominal")
+    reported = number("ups.realpower")
+    if reported is not None:
+        return {"realpower": round(reported), "realpower_nominal": nominal, "realpower_estimated": False}
+    load = number("ups.load")
+    if load is not None and nominal:
+        return {"realpower": round(load / 100 * nominal), "realpower_nominal": nominal, "realpower_estimated": True}
+    return {"realpower": None, "realpower_nominal": nominal, "realpower_estimated": False}
+
+
 def map_nodes_to_agents(agents, nodes, ptero_info):
     """決定每個 Pterodactyl node 跑在哪台 Agent 主機上，回傳 ({node id: agent index}, 設定問題清單)。
 
@@ -220,13 +242,15 @@ class ControllerService:
             self.state.update("ups", ok=False, power=None, battery=None, status="UNKNOWN", status_flags=[],
                               error=str(e), updated_at=now)
             self.state.update("nut", connected=False, error=str(e), latency_ms=None, last_update=now)
-            self.state.add_sample({"t": now, "battery": None, "load": None, "runtime": None,
-                                   "input_voltage": None, "output_voltage": None, "power": None})
+            self.state.add_sample({"t": now, "battery": None, "load": None, "runtime": None, "realpower": None,
+                                   "input_voltage": None, "output_voltage": None, "battery_voltage": None,
+                                   "power": None})
             if self._nut_connected is not False:
                 self.log(f"❌ 讀取 UPS 狀態失敗: {e}", source="nut")
             self._nut_connected = False
             return snapshot
 
+        snapshot.update(estimate_realpower(variables, self.settings.ups_realpower_nominal))
         if self._nut_connected is False:
             self.log("✅ NUT 連線恢復", source="nut")
         self._nut_connected = True
@@ -238,8 +262,10 @@ class ControllerService:
             "battery": snapshot["battery"],
             "load": snapshot["load"],
             "runtime": snapshot["runtime"],
+            "realpower": snapshot["realpower"],
             "input_voltage": snapshot["input_voltage"],
             "output_voltage": snapshot["output_voltage"],
+            "battery_voltage": snapshot["battery_voltage"],
             "power": snapshot["power"],
         })
         if self._last_power is not None and snapshot["power"] != self._last_power:

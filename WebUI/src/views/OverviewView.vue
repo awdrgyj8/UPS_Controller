@@ -8,7 +8,7 @@ import FlowStepper from '../components/FlowStepper.vue'
 import LineChart from '../components/LineChart.vue'
 import EventList from '../components/EventList.vue'
 import StatusPill from '../components/StatusPill.vue'
-import { agentLevel, batteryLevel, isServerRunning, powerLevel, store } from '../store.js'
+import { agentLevel, batteryLevel, isServerRunning, loadSubText, powerLevel, store, wattsText } from '../store.js'
 import { duration, num } from '../format.js'
 
 const s = computed(() => store.state)
@@ -54,7 +54,9 @@ const triggered = computed(() => conditions.value.every((c) => c.ok))
 
 const series = (key) => store.history.map((sample) => ({ t: sample.t, v: sample[key] }))
 const batterySeries = computed(() => series('battery'))
-const loadSeries = computed(() => series('load'))
+// 有瓦數（回報或估算）時顯示功率趨勢，否則顯示負載 %
+const showWatts = computed(() => ups.value.realpower != null)
+const loadSeries = computed(() => series(showWatts.value ? 'realpower' : 'load'))
 function openTopology(id) {
   location.hash = `#/topology?node=${id}`
 }
@@ -73,8 +75,9 @@ const events = computed(() => [...(s.value.events || [])].reverse().slice(0, 10)
                :marker="threshold" :marker-label="`關機門檻 ${threshold}%`" />
       </StatTile>
       <StatTile label="預估續航" icon="clock" :value="duration(ups.runtime, true)" sub="依目前負載估算" />
-      <StatTile label="UPS 負載" icon="activity" :value="ups.load != null ? ups.load + '%' : '-'"
-                :sub="vars['ups.realpower'] ? `${vars['ups.realpower']} W / ${vars['ups.realpower.nominal'] || '-'} W` : ''">
+      <StatTile label="UPS 負載" icon="activity" data-testid="load-tile"
+                :value="ups.realpower != null ? wattsText(ups) : ups.load != null ? ups.load + '%' : '-'"
+                :sub="loadSubText(ups)">
         <Meter :value="ups.load" :level="loadLevel" />
       </StatTile>
       <StatTile label="輸入電壓" icon="zap" :value="num(ups.input_voltage, 1, 'V')"
@@ -160,10 +163,12 @@ const events = computed(() => [...(s.value.events || [])].reverse().slice(0, 10)
       </div>
       <div class="card">
         <div class="card-header">
-          <h2 class="card-title">UPS 負載</h2><span class="card-sub">最近 15 分鐘 · %</span>
+          <h2 class="card-title">{{ showWatts ? '負載功率' : 'UPS 負載' }}</h2>
+          <span class="card-sub">最近 15 分鐘 · {{ showWatts ? (ups.realpower_estimated ? 'W（估算）' : 'W') : '%' }}</span>
         </div>
         <div class="card-body">
-          <LineChart :samples="loadSeries" :now="store.now" :window-sec="900" :min="0" :max="100" unit="%"
+          <LineChart :samples="loadSeries" :now="store.now" :window-sec="900" :min="0"
+                     :max="showWatts ? (ups.realpower_nominal || null) : 100" :unit="showWatts ? 'W' : '%'"
                      label="load" color="var(--accent)" />
         </div>
       </div>

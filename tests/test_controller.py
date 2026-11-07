@@ -1,7 +1,7 @@
 """控制流程測試：以模擬環境執行與實機相同的控制程式碼。"""
 import pytest
 
-from Core.controller import decide, map_nodes_to_agents
+from Core.controller import decide, estimate_realpower, map_nodes_to_agents
 
 
 @pytest.mark.parametrize("snapshot, expected_on, action", [
@@ -162,3 +162,16 @@ def test_ups_history_is_recorded(harness):
     samples = harness.state.history()
     assert len(samples) == 2
     assert samples[-1]["battery"] == 100
+
+
+def test_estimate_realpower():
+    # 有回報 ups.realpower 就直接用
+    assert estimate_realpower({"ups.realpower": "481", "ups.load": "53"}) == \
+        {"realpower": 481, "realpower_nominal": None, "realpower_estimated": False}
+    # CyberPower：只有負載 % 與額定功率
+    cps = {"ups.load": "20", "ups.realpower.nominal": "600"}
+    assert estimate_realpower(cps) == {"realpower": 120, "realpower_nominal": 600.0, "realpower_estimated": True}
+    # 手動設定的額定功率優先
+    assert estimate_realpower(cps, 900)["realpower"] == 180
+    # 缺少額定功率時無法估算
+    assert estimate_realpower({"ups.load": "20"})["realpower"] is None

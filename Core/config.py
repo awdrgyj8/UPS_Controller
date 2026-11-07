@@ -43,6 +43,7 @@ class Settings:
     web_port: int = 8080
     web_token: str = field(default="", repr=False)
     console_table: bool = True
+    ups_realpower_nominal: float = 0   # 0 = 使用 UPS 回報的 ups.realpower.nominal
     power_state_path: Path = BASE_DIR / "Data" / "powerState.json"
 
     def public_dict(self):
@@ -70,6 +71,7 @@ def load_settings(simulate=None):
         web_port=_env_number("WEB_PORT", 8080, int),
         web_token=os.getenv("WEB_TOKEN") or "",
         console_table=_env_bool("CONSOLE_TABLE", True),
+        ups_realpower_nominal=_env_number("UPS_REALPOWER_NOMINAL", 0),
     )
     if simulate:
         # 模擬模式固定使用較短的間隔，方便觀察整個流程（不受實機 .env 的間隔設定影響）

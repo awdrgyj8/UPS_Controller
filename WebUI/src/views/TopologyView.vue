@@ -4,7 +4,7 @@ import Icon from '../components/Icon.vue'
 import StatusPill from '../components/StatusPill.vue'
 import TopologyGraph from '../components/TopologyGraph.vue'
 import AgentCard from '../components/AgentCard.vue'
-import { PHASE_LEVEL, isServerRunning, powerLevel, serverStatus, store } from '../store.js'
+import { PHASE_LEVEL, isServerRunning, powerLevel, serverStatus, store, wattsText } from '../store.js'
 import { ago, bytes, clock, duration, num } from '../format.js'
 
 const s = computed(() => store.state)
@@ -74,7 +74,7 @@ const settings = computed(() => s.value.settings)
             <dt>序號</dt><dd class="mono">{{ vars['ups.serial'] || vars['device.serial'] || '-' }}</dd>
             <dt>電量</dt><dd>{{ s.ups.battery ?? '-' }}%（門檻 {{ settings.shutdown_battery_threshold }}%）</dd>
             <dt>預估續航</dt><dd>{{ duration(s.ups.runtime) }}</dd>
-            <dt>負載</dt><dd>{{ s.ups.load ?? '-' }}%（{{ vars['ups.realpower'] || '-' }} W）</dd>
+            <dt>負載</dt><dd>{{ s.ups.load ?? '-' }}%（{{ wattsText(s.ups) }}{{ s.ups.realpower_estimated ? '，估算' : '' }}）</dd>
             <dt>電池電壓</dt><dd>{{ num(s.ups.battery_voltage, 1, 'V') }}</dd>
             <dt>輸出電壓</dt><dd>{{ num(s.ups.output_voltage, 1, 'V') }}</dd>
             <dt>溫度</dt><dd>{{ num(s.ups.temperature, 1, '°C') }}</dd>

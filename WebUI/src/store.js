@@ -122,6 +122,20 @@ export function serverStatus(server) {
 
 export const isServerRunning = (server) => serverStatus(server).level === 'good'
 
+/** 負載功率文字：UPS 沒回報瓦數時為估算值，前面加「≈」 */
+export function wattsText(ups) {
+  if (ups?.realpower == null) return '-'
+  return `${ups.realpower_estimated ? '≈' : ''}${ups.realpower} W`
+}
+
+export function loadSubText(ups) {
+  const parts = []
+  if (ups.realpower != null && ups.load != null) parts.push(`負載 ${ups.load}%`)
+  if (ups.realpower_nominal) parts.push(`額定 ${Math.round(ups.realpower_nominal)} W`)
+  if (ups.realpower_estimated) parts.push('估算值')
+  return parts.join(' · ')
+}
+
 export function powerLevel(ups) {
   if (ups.ok !== true) return { level: 'critical', label: '無法讀取' }
   if (ups.power) return { level: 'good', label: '市電供電' }

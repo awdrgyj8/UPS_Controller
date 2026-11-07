@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import StatusPill from '../components/StatusPill.vue'
 import StatTile from '../components/StatTile.vue'
 import LineChart from '../components/LineChart.vue'
-import { batteryLevel, powerLevel, store } from '../store.js'
+import { batteryLevel, loadSubText, powerLevel, store, wattsText } from '../store.js'
 import { ago, clock, duration, num } from '../format.js'
 
 const s = computed(() => store.state)
@@ -25,10 +25,13 @@ const series = (key, scale = 1) =>
 const CHARTS = computed(() => [
   { key: 'battery', title: '電池電量', unit: '%', data: series('battery'), min: 0, max: 100,
     threshold: { value: threshold.value, label: `關機門檻 ${threshold.value}%` } },
+  { key: 'realpower', title: ups.value.realpower_estimated ? '負載功率（估算）' : '負載功率', unit: 'W',
+    data: series('realpower'), min: 0, max: ups.value.realpower_nominal || null },
   { key: 'load', title: 'UPS 負載', unit: '%', data: series('load'), min: 0, max: 100 },
-  { key: 'input', title: '輸入電壓', unit: 'V', data: series('input_voltage'), min: 0, max: null },
   { key: 'runtime', title: '預估續航', unit: '分鐘', data: series('runtime', 1 / 60), min: 0, max: null,
     format: (v) => `${v.toFixed(1)} 分` },
+  { key: 'input', title: '輸入電壓', unit: 'V', data: series('input_voltage'), min: 0, max: null },
+  { key: 'battery_voltage', title: '電池電壓', unit: 'V', data: series('battery_voltage'), min: null, max: null },
 ])
 
 const tableRows = computed(() => {
@@ -116,7 +119,8 @@ const DESCRIPTIONS = {
                 :sub="`低電量 ${vars['battery.charge.low'] || '-'}% · 關機門檻 ${threshold}%`" />
       <StatTile label="預估續航" :value="duration(ups.runtime, true)" :sub="`低續航 ${duration(Number(vars['battery.runtime.low']), true)}`" />
       <StatTile label="電池電壓" :value="num(ups.battery_voltage, 1, 'V')" :sub="`額定 ${vars['battery.voltage.nominal'] || '-'} V · ${vars['battery.type'] || ''}`" />
-      <StatTile label="負載" :value="ups.load != null ? ups.load + '%' : '-'" :sub="`${vars['ups.realpower'] || '-'} W / ${vars['ups.realpower.nominal'] || '-'} W`" />
+      <StatTile label="負載功率" :value="ups.realpower != null ? wattsText(ups) : ups.load != null ? ups.load + '%' : '-'"
+                :sub="loadSubText(ups) || '-'" />
       <StatTile label="輸入" :value="num(ups.input_voltage, 1, 'V')" :sub="`${num(ups.input_frequency, 2, 'Hz')} · 切換 ${vars['input.transfer.low'] || '-'}–${vars['input.transfer.high'] || '-'} V`" />
       <StatTile label="輸出" :value="num(ups.output_voltage, 1, 'V')" :sub="`${vars['output.frequency'] || '-'} Hz`" />
       <StatTile label="溫度" :value="num(ups.temperature, 1, '°C')" :sub="`自我測試：${vars['ups.test.result'] || '-'}`" />
@@ -146,7 +150,7 @@ const DESCRIPTIONS = {
       <div v-else class="card-body table-wrap">
         <table class="table">
           <thead>
-            <tr><th>時間</th><th>市電</th><th class="num">電量 %</th><th class="num">負載 %</th><th class="num">輸入 V</th><th class="num">輸出 V</th><th class="num">續航</th></tr>
+            <tr><th>時間</th><th>市電</th><th class="num">電量 %</th><th class="num">負載 %</th><th class="num">功率 W</th><th class="num">輸入 V</th><th class="num">輸出 V</th><th class="num">續航</th></tr>
           </thead>
           <tbody>
             <tr v-for="row in tableRows" :key="row.seq">
@@ -154,6 +158,7 @@ const DESCRIPTIONS = {
               <td>{{ row.power === true ? '正常' : row.power === false ? '電池' : '—' }}</td>
               <td class="num">{{ row.battery ?? '—' }}</td>
               <td class="num">{{ row.load ?? '—' }}</td>
+              <td class="num">{{ row.realpower ?? '—' }}</td>
               <td class="num">{{ num(row.input_voltage, 1) }}</td>
               <td class="num">{{ num(row.output_voltage, 1) }}</td>
               <td class="num">{{ duration(row.runtime, true) }}</td>
