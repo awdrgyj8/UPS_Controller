@@ -20,7 +20,8 @@ def _format_uptime(uptime_seconds):
     return f"{seconds}s"
 
 
-def show_status(ups_snapshot, expected_power_state, statuses):
+def show_status(ups_snapshot, expected_power_state, agents):
+    """ups_snapshot 是控制流程的 UPS 快照（dict），agents 是共享狀態裡的 AgentState 清單。"""
     ups_table = Table(
         title=f"UPS / NUT 狀態 - {datetime.datetime.now().strftime('%H:%M:%S')}",
         show_header=True,
@@ -66,25 +67,24 @@ def show_status(ups_snapshot, expected_power_state, statuses):
     table.add_column("訊息")
 
     expected_label = "開機" if expected_power_state is True else "關機"
-    for status in statuses:
-        online = status["online"] is True
-        connection_label = "[green]Online[/green]" if online else "[red]Offline[/red]"
-        latency = "-" if status["latency_ms"] is None else f"{status['latency_ms']} ms"
-        message = "OK" if online else status["error"]
+    for agent in agents:
+        connection_label = "[green]Online[/green]" if agent.online else "[red]Offline[/red]"
+        latency = "-" if agent.latency_ms is None else f"{agent.latency_ms} ms"
+        message = "OK" if agent.online else agent.error
         table.add_row(
-            status["name"],
-            status["ip"],
-            status["port"],
-            status["mac"],
+            agent.name,
+            agent.ip,
+            agent.port,
+            agent.mac,
             expected_label,
             connection_label,
-            status["hostname"] or "-",
-            _format_uptime(status["uptime_seconds"]),
+            agent.hostname or "-",
+            _format_uptime(agent.uptime_seconds),
             latency,
             message or "-",
         )
 
-    if len(statuses) == 0:
+    if len(agents) == 0:
         table.add_row("-", "-", "-", "-", expected_label, "[yellow]Unknown[/yellow]", "-", "-", "-", "AgentInfo 未設定或沒有 Agent")
 
     console.print(table)

@@ -72,19 +72,39 @@ uv run --group e2e pytest tests/e2e                  # 瀏覽器 E2E 測試（�
 ```
 main.py              進入點（--simulate / --no-web / --host / --port）
 Core/config.py       設定：唯一讀取環境變數與 .env 的地方（pydantic-settings）
-Core/controller.py   控制迴圈、UPS/Agent/面板監控
+Core/models.py       共享狀態的形狀（pydantic model），也是 /api/state 的欄位說明
+Core/state.py        執行期共享狀態、事件、歷史資料
+Core/controller.py   控制迴圈：每一輪判斷要不要關機或喚醒，管理背景執行緒
+Core/monitor.py      監控：讀取 UPS、節點、面板的現況並寫進共享狀態
+Core/sequences.py    關機與喚醒流程的實際步驟與進度
 Core/drivers.py      實機驅動：把 Api/ 的客戶端組起來
 Core/simulator.py    模擬環境與模擬驅動（介面與實機驅動相同）
-Core/diagnostics.py  系統自檢、停電演練
-Core/scenarios.py    情境測試
-Core/state.py        執行期共享狀態、事件、歷史資料
+Core/diagnostics.py  測試中心的執行與結果記錄
+Core/selftest.py     系統自檢的各項檢查
+Core/drill.py        停電演練（乾跑）的各個步驟
+Core/scenarios.py    情境測試（僅模擬模式）
 Api/                 對外連線的客戶端：NUT、Pterodactyl、UPS_Agent、Wake-on-LAN（設定由呼叫端傳入）
 Web/server.py        FastAPI：REST API、SSE 即時串流（/api/stream）、直接送出 Web/static
 Web/static/          前端（Vue 3，瀏覽器原生 ES modules，不需要編譯）
 Data/powerState.json 節點預期的電源狀態（執行期產生，不進版控）
 ```
 
-API 文件：啟動後開啟 `/api/docs`。
+API 文件：啟動後開啟 `/api/docs`，裡面有 `/api/state` 每個欄位的型別。
+
+### 共享狀態
+
+控制迴圈、監控執行緒與網頁介面共用一份狀態，形狀定義在 `Core/models.py`：
+
+```python
+state.update("ups", battery=78)        # 更新幾個欄位；欄位名稱寫錯會直接報錯
+state.get("controller").phase          # 讀取（拿到的是複本）
+state.mutate(lambda data: ...)         # 在鎖內做多步修改，data 是整份 AppState
+```
+
+- 新增欄位時先加到 `Core/models.py`，前端才會在 `/api/state` 看到。
+- 設備回傳的資料（節點狀態、面板伺服器）在 `Core/monitor.py` 轉成 model；格式不對的那一筆會顯示為異常並附上原因，
+  不會讓整批更新或控制流程中斷。
+- `tests/test_state.py` 會在跑完一輪停電流程後用 `snapshot(strict=True)` 檢查所有值都符合宣告的型別。
 
 ### 前端
 

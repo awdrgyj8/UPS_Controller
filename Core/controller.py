@@ -1,35 +1,21 @@
-"""控制服務：原本 main.py 的控制迴圈，改寫成可在背景執行並回報進度的服務。
+"""控制服務：每一輪讀取 UPS，決定要不要關機或喚醒，並管理背景執行緒。
 
-判斷邏輯與原本相同：
+判斷邏輯：
   * 節點為開機狀態，且 UPS 改由電池供電、電量 <= 門檻 → 關閉面板伺服器 → 關閉節點
   * 節點為關機狀態，且市電恢復 → 發送 Wake-on-LAN
+
+讀取現況在 monitor.py，關機與喚醒的實際步驟在 sequences.py。
 """
 import datetime
 import json
 import os
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 
 from Api import event_log
-from Api.nut_client import build_ups_snapshot, error_snapshot
-from Core.drivers import DriverError
-from Core.state import PHASE_LABELS, describe_status_flags
-
-SHUTDOWN_STEPS = [
-    ("trigger", "觸發條件成立"),
-    ("list_servers", "取得面板伺服器清單"),
-    ("stop_servers", "送出伺服器停止訊號"),
-    ("wait_servers", "等待伺服器關機"),
-    ("shutdown_agents", "送出節點關機請求"),
-    ("save_state", "更新電源狀態為「關機」"),
-]
-
-WAKE_STEPS = [
-    ("trigger", "市電恢復"),
-    ("wol", "發送 Wake-on-LAN"),
-    ("save_state", "更新電源狀態為「開機」"),
-]
+from Core.monitor import StatusMonitor
+from Core.sequences import SequenceRunner
+from Core.state import PHASE_LABELS
 
 
 def decide(snapshot, expected_on, threshold):
@@ -46,36 +32,6 @@ def decide(snapshot, expected_on, threshold):
     if snapshot["power"] is True:
         return "wake"
     return "hold_off"
-
-
-def map_nodes_to_agents(agents, nodes, ptero_info):
-    """決定每個 Pterodactyl node 跑在哪台 Agent 主機上，回傳 ({node id: agent index}, 設定問題清單)。
-
-    先套用 PteroInfo（node 填 id 或名稱，agent 填 AgentInfo 的 name 或 ip）；
-    沒寫在 PteroInfo 的 node 再自動比對：node fqdn 等於 Agent 的 ip / hostname，其次名稱相同。
-    """
-    indexed = [(agent.get("index", position), agent) for position, agent in enumerate(agents, start=1)]
-    mapping = {}
-    problems = []
-    for entry in ptero_info:
-        node_ref = str(entry.get("node"))
-        agent_ref = str(entry.get("agent"))
-        node = next((n for n in nodes if str(n["id"]) == node_ref or n.get("name") == node_ref), None)
-        agent_index = next((i for i, a in indexed if a.get("name") == agent_ref or a.get("ip") == agent_ref), None)
-        if node is None:
-            problems.append(f"找不到 Pterodactyl node「{node_ref}」")
-        elif agent_index is None:
-            problems.append(f"找不到 Agent「{agent_ref}」（請填 AgentInfo 的 name 或 ip）")
-        else:
-            mapping[node["id"]] = agent_index
-    for node in nodes:
-        if node["id"] in mapping:
-            continue
-        by_fqdn = [i for i, a in indexed if node.get("fqdn") and node["fqdn"] in {a.get("ip"), a.get("hostname")}]
-        by_name = [i for i, a in indexed if node.get("name") and node["name"] == a.get("name")]
-        if by_fqdn or by_name:
-            mapping[node["id"]] = (by_fqdn or by_name)[0]
-    return mapping, problems
 
 
 class PowerStateStore:
@@ -135,12 +91,9 @@ class ControllerService:
         self._stop = threading.Event()
         self._wake = threading.Event()
         self._cycle_lock = threading.Lock()
-        self._status_lock = threading.Lock()
         self._threads = []
-        self._last_power = None
-        self._on_battery_since = None
-        self._nut_connected = None
-        self._ptero_ok = None
+        self.monitor = StatusMonitor(drivers, state)
+        self.sequences = SequenceRunner(settings, drivers, state, power_store, self.monitor, self._stop)
         event_log.add_hook(self._on_log)
 
         state.update("nut", **drivers.nut_target())
@@ -162,7 +115,11 @@ class ControllerService:
 
     # ------------------------------------------------------------------ 生命週期
     def start(self, control=True):
-        targets = [("ups-monitor", self._ups_monitor_loop), ("status-monitor", self._status_monitor_loop)]
+        targets = [
+            ("ups-monitor", lambda: self._repeat(self.monitor.read_ups, self.settings.monitor_interval, "UPS 監控")),
+            ("status-monitor", lambda: self._repeat(self.monitor.refresh_status,
+                                                    min(self.settings.poll_interval, 15), "狀態監控")),
+        ]
         if control:
             targets.append(("control-loop", self._control_loop))
         for name, target in targets:
@@ -179,6 +136,15 @@ class ControllerService:
         self._stop.set()
         self._wake.set()
         event_log.remove_hook(self._on_log)
+
+    def _repeat(self, task, interval, name):
+        """背景執行緒：固定間隔重複執行 task，出錯只記錄，不讓執行緒中止。"""
+        while not self._stop.is_set():
+            try:
+                task()
+            except Exception as e:
+                self.log(f"❌ {name}發生未預期錯誤: {e}")
+            self._stop.wait(interval)
 
     def trigger_poll(self):
         self._wake.set()
@@ -199,213 +165,12 @@ class ControllerService:
         self.log(f"⚠️ 手動設定節點預期電源狀態為「{'開機' if value else '關機'}」", source="web")
         self.trigger_poll()
 
-    # ------------------------------------------------------------------ 監控
-    def _ups_monitor_loop(self):
-        while not self._stop.is_set():
-            try:
-                self.read_ups()
-            except Exception as e:  # 監控執行緒不可中止
-                self.log(f"❌ UPS 監控發生未預期錯誤: {e}")
-            self._stop.wait(self.settings.monitor_interval)
-
-    def _status_monitor_loop(self):
-        interval = min(self.settings.poll_interval, 15)
-        while not self._stop.is_set():
-            try:
-                self.refresh_status()
-            except Exception as e:
-                self.log(f"❌ 狀態監控發生未預期錯誤: {e}")
-            self._stop.wait(interval)
-
-    def read_ups(self):
-        started = time.monotonic()
-        now = time.time()
-        try:
-            variables = self.drivers.ups_variables()
-            latency = round((time.monotonic() - started) * 1000)
-            snapshot = build_ups_snapshot(variables)
-        except (DriverError, ValueError) as e:
-            snapshot = error_snapshot(e)
-            self.state.update("ups", ok=False, power=None, battery=None, status="UNKNOWN", status_flags=[],
-                              error=str(e), updated_at=now)
-            self.state.update("nut", connected=False, error=str(e), latency_ms=None, last_update=now)
-            self.state.add_sample({"t": now, "battery": None, "load": None, "runtime": None,
-                                   "input_voltage": None, "output_voltage": None, "power": None})
-            if self._nut_connected is not False:
-                self.log(f"❌ 讀取 UPS 狀態失敗: {e}", source="nut")
-            self._nut_connected = False
-            return snapshot
-
-        if self._nut_connected is False:
-            self.log("✅ NUT 連線恢復", source="nut")
-        self._nut_connected = True
-        # 記下改由電池供電的起點，介面用來顯示已經停電多久
-        if snapshot["power"]:
-            self._on_battery_since = None
-        elif self._on_battery_since is None:
-            self._on_battery_since = now
-        self.state.update("ups", **snapshot, status_flags=describe_status_flags(snapshot["status"]),
-                          variables=variables, updated_at=now, on_battery_since=self._on_battery_since)
-        self.state.update("nut", connected=True, error="", latency_ms=latency, last_update=now)
-        self.state.add_sample({
-            "t": now,
-            "battery": snapshot["battery"],
-            "load": snapshot["load"],
-            "runtime": snapshot["runtime"],
-            "input_voltage": snapshot["input_voltage"],
-            "output_voltage": snapshot["output_voltage"],
-            "power": snapshot["power"],
-        })
-        if self._last_power is not None and snapshot["power"] != self._last_power:
-            if snapshot["power"]:
-                self.log(f"✅ 市電恢復（UPS 狀態 {snapshot['status']}）", source="nut")
-            else:
-                self.log(f"⚠️ 市電中斷，UPS 改由電池供電（電量 {snapshot['battery']}%）", source="nut")
-        self._last_power = snapshot["power"]
-        return snapshot
-
-    def refresh_status(self):
-        with self._status_lock:
-            self.refresh_agents()
-            self.refresh_ptero()
-
-    def refresh_agents(self):
-        configs, error = self.drivers.agent_configs()
-        now = time.time()
-        statuses = []
-        if configs:
-            with ThreadPoolExecutor(max_workers=min(8, len(configs))) as pool:
-                statuses = list(pool.map(
-                    lambda pair: self.drivers.agent_status(pair[1], pair[0]),
-                    enumerate(configs, start=1),
-                ))
-        previous = {agent["index"]: agent for agent in self.state.get("agents")}
-        for index, status in enumerate(statuses, start=1):
-            old = previous.get(index)
-            status["index"] = index
-            status["checked_at"] = now
-            status["last_seen"] = now if status["online"] else (old or {}).get("last_seen")
-            status["mac_valid"] = self.drivers.valid_mac(status["mac"])
-            if old is not None and old["online"] != status["online"]:
-                if status["online"]:
-                    self.log(f"✅ Agent {status['name']} ({status['ip']}) 已上線", source="agent")
-                else:
-                    self.log(f"⚠️ Agent {status['name']} ({status['ip']}) 離線: {status['error']}", source="agent")
-
-        def apply(data):
-            data["agents"] = statuses
-            data["agent_config_error"] = error
-            data["agents_updated_at"] = now
-            self._link_topology(data)
-
-        self.state.mutate(apply)
-        return statuses
-
-    def refresh_ptero(self):
-        now = time.time()
-        if not self.drivers.ptero_configured():
-            self.state.update("ptero", configured=False, ok=None, servers=[], nodes=[], updated_at=now,
-                              error="PteroApi_Url / PteroApi_AppKey / PteroApi_ClientKey 未設定")
-            return
-        try:
-            servers = self.drivers.ptero_list_servers()
-        except DriverError as e:
-            self.state.update("ptero", configured=True, ok=False, error=str(e), updated_at=now)
-            if self._ptero_ok is not False:
-                self.log(f"❌ Pterodactyl 面板讀取失敗: {e}", source="ptero")
-            self._ptero_ok = False
-            return
-        try:
-            nodes = self.drivers.ptero_list_nodes()
-        except DriverError:
-            nodes = []
-
-        def load_resources(server):
-            try:
-                server.update(self.drivers.ptero_server_resources(server["identifier"]))
-                server["error"] = ""
-            except DriverError as e:
-                server.update(state="unknown", error=str(e))
-            return server
-
-        if servers:
-            with ThreadPoolExecutor(max_workers=min(8, len(servers))) as pool:
-                servers = list(pool.map(load_resources, servers))
-        node_names = {node["id"]: node["name"] for node in nodes}
-        for server in servers:
-            server["node_name"] = node_names.get(server.get("node_id"), "")
-        if self._ptero_ok is False:
-            self.log("✅ Pterodactyl 面板連線恢復", source="ptero")
-        self._ptero_ok = True
-
-        def apply(data):
-            data["ptero"].update(configured=True, ok=True, error="", servers=servers, nodes=nodes, updated_at=now)
-            self._link_topology(data)
-
-        self.state.mutate(apply)
-
-    def _link_topology(self, data):
-        """依 PteroInfo / 自動比對，把 Pterodactyl node 與伺服器掛到對應的 Agent 主機下，供拓撲圖使用。"""
-        ptero_info, _ = self.drivers.ptero_info()
-        nodes = data["ptero"].get("nodes") or []
-        mapping, _ = map_nodes_to_agents(data["agents"], nodes, ptero_info)
-        by_index = {agent["index"]: agent for agent in data["agents"]}
-        for agent in data["agents"]:
-            agent["ptero_node_ids"] = [node_id for node_id, index in mapping.items() if index == agent["index"]]
-            agent["servers"] = []
-        for server in data["ptero"].get("servers") or []:
-            server["agent_index"] = mapping.get(server.get("node_id"))
-            if server["agent_index"] in by_index:
-                by_index[server["agent_index"]]["servers"].append(server["identifier"])
-
-    def _update_server_state(self, identifier, server_state):
-        def apply(data):
-            for server in data["ptero"].get("servers") or []:
-                if server["identifier"] == identifier:
-                    server["state"] = server_state
-
-        self.state.mutate(apply)
-
-    # ------------------------------------------------------------------ 流程進度
-    def _begin_sequence(self, kind, steps, title):
-        sequence = {
-            "kind": kind,
-            "title": title,
-            "result": "running",
-            "detail": "",
-            "started_at": time.time(),
-            "finished_at": None,
-            "steps": [{"id": step_id, "label": label, "status": "pending", "detail": "", "progress": None}
-                      for step_id, label in steps],
-        }
-        self.state.update("controller", sequence=sequence)
-
-    def _step(self, step_id, status, detail="", progress=None):
-        def apply(data):
-            sequence = data["controller"]["sequence"]
-            for step in sequence["steps"]:
-                if step["id"] == step_id:
-                    step.update(status=status, detail=detail, progress=progress)
-
-        self.state.mutate(apply)
-
-    def _end_sequence(self, result, detail):
-        def apply(data):
-            sequence = data["controller"]["sequence"]
-            sequence.update(result=result, detail=detail, finished_at=time.time())
-            for step in sequence["steps"]:
-                if step["status"] == "pending":
-                    step["status"] = "skipped"
-            data["controller"]["last_sequence"] = dict(sequence)
-
-        self.state.mutate(apply)
-
     # ------------------------------------------------------------------ 控制
     def _control_loop(self):
         while not self._stop.is_set():
             try:
                 if self.paused:
-                    self.read_ups()
+                    self.monitor.read_ups()
                     self._set_phase("paused", "自動控制已暫停：僅監控，不會執行關機或喚醒")
                 else:
                     self.run_cycle()
@@ -416,13 +181,13 @@ class ControllerService:
             self._wake.clear()
 
     def run_cycle(self):
+        """跑一輪控制流程，回傳這一輪的判斷（skip / shutdown / hold_on / wake / hold_off）。"""
         with self._cycle_lock:
             data = self.power_store.read()
             expected = data["AgentPowerState"]
-            controller = self.state.get("controller")
             self.state.update("controller", expected_power_state=expected, last_cycle_at=time.time(),
-                              cycle_count=controller["cycle_count"] + 1)
-            snapshot = self.read_ups()
+                              cycle_count=self.state.get("controller").cycle_count + 1)
+            snapshot = self.monitor.read_ups()
             threshold = self.settings.shutdown_battery_threshold
             action = decide(snapshot, expected, threshold)
 
@@ -433,11 +198,13 @@ class ControllerService:
                 return action
 
             if action == "shutdown":
-                if not self._run_shutdown(data, snapshot):
+                self._set_phase("shutdown", f"電池供電且電量 {snapshot['battery']}% ≤ 門檻 {threshold}%，執行關機程序")
+                if not self.sequences.run_shutdown(data, snapshot):
                     return action
                 self._set_phase("nodes_off", "關機程序完成，節點已關機，等待市電恢復")
             elif action == "wake":
-                if self._run_wake(data, snapshot):
+                self._set_phase("waking", "市電已恢復，發送 Wake-on-LAN 喚醒節點")
+                if self.sequences.run_wake(data, snapshot):
                     self._set_phase("monitoring", "已送出 Wake-on-LAN，等待節點開機上線")
                 else:
                     self._set_phase("nodes_off", "Wake-on-LAN 未送出，下一輪重試")
@@ -464,133 +231,6 @@ class ControllerService:
     def _show_console(self, snapshot, expected):
         if self.console_view is not None and self.settings.console_table:
             self.console_view.show_status(snapshot, expected, self.state.get("agents"))
-
-    def _run_shutdown(self, data, snapshot):
-        threshold = self.settings.shutdown_battery_threshold
-        self._begin_sequence("shutdown", SHUTDOWN_STEPS, "停電關機程序")
-        self._set_phase("shutdown", f"電池供電且電量 {snapshot['battery']}% ≤ 門檻 {threshold}%，執行關機程序")
-        self.log("正在執行關機程序", level="warning")
-        self._step("trigger", "done", f"電池供電（{snapshot['status']}），電量 {snapshot['battery']}% ≤ {threshold}%")
-
-        # 取得 Pterodactyl 所有伺服器 UUID
-        self._step("list_servers", "running")
-        try:
-            identifiers = [server["identifier"] for server in self.drivers.ptero_list_servers()]
-        except DriverError as e:
-            self.log(f"Request failed: {e}", level="error", source="ptero")
-            identifiers = []
-        if len(identifiers) == 0:
-            message = "未取得任何 Pterodactyl 伺服器 UUID，跳過節點關機流程"
-            self.log(f"⚠️ {message}")
-            self._step("list_servers", "failed", "未取得任何伺服器 UUID")
-            self._end_sequence("aborted", message)
-            return False
-        self._step("list_servers", "done", f"共 {len(identifiers)} 台伺服器")
-
-        self._step("stop_servers", "running")
-        sent = sum(1 for identifier in identifiers if self.drivers.ptero_send_power(identifier, "stop"))
-        self._step("stop_servers", "done" if sent == len(identifiers) else "warning",
-                   f"已送出 {sent}/{len(identifiers)} 個停止訊號")
-
-        # 檢查 Pterodactyl 所有伺服器是否皆以關閉
-        max_attempts = self.settings.server_stop_max_attempts
-        all_down = False
-        self._step("wait_servers", "running", "檢查伺服器狀態中…", progress=0)
-        for attempt in range(1, max_attempts + 1):
-            pending = []
-            for identifier in identifiers:
-                try:
-                    current = self.drivers.ptero_server_resources(identifier)["state"]
-                except DriverError as e:
-                    self.log(f"❌ 取得 {identifier} 電源狀態時發生錯誤: {e}", source="ptero")
-                    current = "unknown"
-                self._update_server_state(identifier, current)
-                if current != "offline":
-                    self.log(f"⌛ 正在等待伺服器 {identifier} 關機，目前狀態 {current}", level="info")
-                    pending.append(identifier)
-            if len(pending) == 0:
-                self.log("✅ 面板伺服器皆已關機，開始進入節點關機流程")
-                all_down = True
-                break
-            self._step("wait_servers", "running",
-                       f"第 {attempt}/{max_attempts} 次檢查，尚有 {len(pending)} 台未關機：{', '.join(pending)}",
-                       progress=attempt / max_attempts)
-            # 給予伺服器關機緩衝時間
-            if self._stop.wait(self.settings.server_stop_check_interval):
-                return False
-        if not all_down:
-            message = "等待面板伺服器關機逾時，跳過節點關機流程"
-            self.log(f"⚠️ {message}")
-            self._step("wait_servers", "failed", f"逾時：{max_attempts} 次檢查後仍有伺服器未關機")
-            self._end_sequence("aborted", message)
-            return False
-        self._step("wait_servers", "done", "全部伺服器皆為 offline", progress=1)
-
-        # 節點關機程序
-        self._step("shutdown_agents", "running")
-        configs, error = self.drivers.agent_configs()
-        accepted = not error
-        if error:
-            self.log(f"❌ {error}", source="agent")
-        results = []
-        for agent in configs:
-            ok, message = self.drivers.agent_shutdown(agent)
-            results.append(f"{agent.get('name', agent.get('ip', '?'))}: {'接受' if ok else message}")
-            if not ok:
-                accepted = False
-        if not accepted:
-            message = "部分或全部節點未接受關機請求，暫不更新節點關機狀態"
-            self.log(f"⚠️ {message}")
-            self._step("shutdown_agents", "failed", "；".join(results) or error)
-            self._end_sequence("aborted", message)
-            return False
-        self._step("shutdown_agents", "done", "；".join(results) or "沒有設定任何 Agent")
-
-        # 將目前節點狀態寫到powerState
-        data["AgentPowerState"] = False
-        self.power_store.write(data)
-        self.state.update("controller", expected_power_state=False)
-        self._step("save_state", "done", "AgentPowerState = false")
-        self._end_sequence("success", "節點關機程序完成")
-        return True
-
-    def _run_wake(self, data, snapshot):
-        self._begin_sequence("wake", WAKE_STEPS, "復電開機程序")
-        self._set_phase("waking", "市電已恢復，發送 Wake-on-LAN 喚醒節點")
-        self._step("trigger", "done", f"UPS 狀態 {snapshot['status']}，電量 {snapshot['battery']}%")
-        configs, error = self.drivers.agent_configs()
-        if error:
-            self.log(f"❌ {error}", source="wol")
-        for agent in configs:
-            if "mac" not in agent:
-                self.log(f"❌ AgentInfo 缺少 mac 欄位: {agent}", source="wol")
-        macs = [agent["mac"] for agent in configs if "mac" in agent]
-
-        attempts = self.settings.wol_attempts
-        packets = 0
-        for attempt in range(1, attempts + 1):
-            self._step("wol", "running", f"第 {attempt}/{attempts} 輪，已送出 {packets} 個封包",
-                       progress=attempt / attempts)
-            for mac in macs:
-                if self.drivers.wol(mac):
-                    packets += 1
-            if self._stop.wait(self.settings.wol_interval):
-                return False
-
-        if packets > 0:
-            self._step("wol", "done", f"共送出 {packets} 個 WOL 封包（{len(macs)} 個 MAC × {attempts} 輪）", progress=1)
-            data["AgentPowerState"] = True
-            self.power_store.write(data)
-            self.state.update("controller", expected_power_state=True)
-            self._step("save_state", "done", "AgentPowerState = true")
-            self._end_sequence("success", "已送出 Wake-on-LAN，等待節點開機")
-            self.log(f"✅ 已送出 {packets} 個 Wake-on-LAN 封包，節點開機中", source="wol")
-            return True
-        message = "未成功送出 Wake-on-LAN 封包，暫不更新節點開機狀態"
-        self.log(f"⚠️ {message}")
-        self._step("wol", "failed", "沒有任何封包送出成功")
-        self._end_sequence("aborted", message)
-        return False
 
     # ------------------------------------------------------------------ 手動操作（Web）
     def agent_config(self, index):
@@ -620,5 +260,5 @@ class ControllerService:
         name = agent.get("name", f"Agent {index}")
         labels = {"status": "連線測試", "verify": "簽章驗證", "wol": "Wake-on-LAN"}
         self.log(f"{'✅' if ok else '❌'} [手動] {name} {labels[action]}：{detail}", source="web")
-        threading.Thread(target=self.refresh_status, daemon=True).start()
+        threading.Thread(target=self.monitor.refresh_status, daemon=True).start()
         return {"ok": ok, "detail": detail, "elapsed_ms": elapsed}

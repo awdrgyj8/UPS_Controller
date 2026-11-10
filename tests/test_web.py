@@ -12,7 +12,7 @@ def client(harness):
 
 
 def test_state_endpoint(client, harness):
-    harness.service.read_ups()
+    harness.service.monitor.read_ups()
     response = client.get("/api/state")
     assert response.status_code == 200
     body = response.json()

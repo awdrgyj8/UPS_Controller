@@ -6,9 +6,11 @@ import time
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+from Core.models import Event, Sample, Snapshot
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -20,6 +22,14 @@ class FrontendFiles(StaticFiles):
         response = await super().get_response(path, scope)
         response.headers["Cache-Control"] = "no-cache"
         return response
+
+
+class HistoryResponse(BaseModel):
+    samples: list[Sample]
+
+
+class EventsResponse(BaseModel):
+    events: list[Event]
 
 
 class PowerStateBody(BaseModel):
@@ -67,17 +77,21 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
     def health():
         return {"ok": True, "mode": service.drivers.mode, "auth_required": bool(settings.web_token)}
 
-    @app.get("/api/state", dependencies=auth)
+    # 這三個端點直接回傳 JSONResponse：response_model 只用來產生 /api/docs 的欄位說明，
+    # 不在輸出時再驗證一次，設備回傳奇怪的資料時介面仍然拿得到狀態。
+    @app.get("/api/state", dependencies=auth, response_model=Snapshot)
     def get_state():
-        return state.snapshot()
+        return JSONResponse(state.snapshot())
 
-    @app.get("/api/history", dependencies=auth)
+    @app.get("/api/history", dependencies=auth, response_model=HistoryResponse)
     def get_history(minutes: float = 60):
-        return {"samples": state.history(since_ts=time.time() - minutes * 60)}
+        samples = state.history(since_ts=time.time() - minutes * 60)
+        return JSONResponse({"samples": [sample.model_dump() for sample in samples]})
 
-    @app.get("/api/events", dependencies=auth)
+    @app.get("/api/events", dependencies=auth, response_model=EventsResponse)
     def get_events(limit: int = 500, level: str | None = None):
-        return {"events": state.events(limit=min(limit, 1000), level=level)}
+        events = state.events(limit=min(limit, 1000), level=level)
+        return JSONResponse({"events": [event.model_dump() for event in events]})
 
     @app.get("/api/stream", dependencies=auth)
     async def stream(request: Request):
@@ -91,8 +105,8 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
                     yield f"event: state\ndata: {json.dumps(state.snapshot(), ensure_ascii=False)}\n\n"
                 samples = state.history(since_seq=last_seq)
                 if samples:
-                    last_seq = samples[-1]["seq"]
-                    yield f"event: samples\ndata: {json.dumps(samples)}\n\n"
+                    last_seq = samples[-1].seq
+                    yield f"event: samples\ndata: {json.dumps([sample.model_dump() for sample in samples])}\n\n"
                 if time.time() - last_beat > 15:
                     last_beat = time.time()
                     yield ": keep-alive\n\n"
@@ -109,8 +123,8 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
 
     @app.post("/api/control/refresh", dependencies=auth)
     def control_refresh():
-        service.read_ups()
-        service.refresh_status()
+        service.monitor.read_ups()
+        service.monitor.refresh_status()
         return {"ok": True}
 
     @app.post("/api/control/pause", dependencies=auth)
