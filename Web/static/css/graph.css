@@ -35,19 +35,20 @@
   .tg-dot {
     fill: var(--lv, var(--mute));
   }
+  /* 字級由元件依方框寬度決定（font-size 屬性），這裡只管粗細 */
   .tg-name {
-    font-size: 15px;
     font-weight: 700;
   }
   .tg-pill-name {
-    font-size: 13.5px;
     font-weight: 600;
   }
   .tg-sub,
   .tg-link-label {
-    font-size: 12.5px;
     font-weight: 600;
     fill: var(--on-deep-2);
+  }
+  .tg-link-label {
+    font-size: 12.5px;
   }
   .critical .tg-name,
   .critical .tg-sub {

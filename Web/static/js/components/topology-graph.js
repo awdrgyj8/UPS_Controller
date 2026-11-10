@@ -1,35 +1,55 @@
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { PHASE_LEVEL, agentLevel, powerLevel, serverStatus, store } from '../store.js'
 
 // 版面：左欄市電與面板、中欄 UPS / NUT / Controller、右欄各節點，完整模式再往右列出遊戲伺服器。
 // 電力走上緣（方框中線往上 12）、資料走下緣（往下 12），兩種線各有一條直的匯流排，全部走直角。
-const BOX_W = 150
+const BOX_W = 176
 const BOX_H = 60
-const NODE_W = 160
-const X_LEFT = 10
-const X_MID = 216
-const X_NODE = 550
-const X_PILL = 760
+const NODE_W = 190
 const PILL_W = 200
 const PILL_H = 28
 const PILL_PITCH = 34
 const TOP = 34
 const ROW = 90
-const BUS_POWER = 466
-const BUS_DATA = 506
 const LANE = 12
+// 橫向位置一個接一個推出來，改方框寬度時其他東西會跟著移動
+const X_LEFT = 10
+const X_MID = X_LEFT + BOX_W + 56
+const BUS_POWER = X_MID + BOX_W + 60
+const BUS_DATA = BUS_POWER + 40
+const X_NODE = BUS_DATA + 44
+const X_PILL = X_NODE + NODE_W + 50
+// 方框內文字的起點與右側留白
+const TEXT_X = 38
+const TEXT_PAD = 12
 
-// SVG 文字不會自動換行：中日韓字元算 2 個單位，超過就截斷
-function fit(text, units) {
-  let used = 0
-  let out = ''
-  for (const ch of String(text ?? '')) {
-    used += ch.charCodeAt(0) > 0x2e80 ? 2 : 1
-    if (used > units) return out + '…'
-    out += ch
-  }
-  return out
+// SVG 文字不會自動換行也不會自動截斷，所以用 canvas 量出實際寬度再決定怎麼放。
+const FAMILY = getComputedStyle(document.documentElement).getPropertyValue('--font').trim() || 'sans-serif'
+const measurer = document.createElement('canvas').getContext('2d')
+// 網頁字型載入完成後寬度會不一樣，載入後讓圖重新排一次
+const fontsLoaded = ref(0)
+document.fonts?.ready.then(() => fontsLoaded.value++)
+
+function textWidth(text, weight, size) {
+  measurer.font = `${weight} ${size}px ${FAMILY}`
+  return measurer.measureText(text).width
 }
+
+// 依序嘗試 sizes 裡的字級，放得下就用；最小的字級還是放不下才從尾端截掉並加上「…」。
+// 回傳 { text, size, full }，full 是原本的完整文字（被截斷時給滑鼠提示用）。
+function fit(value, maxWidth, weight, sizes) {
+  void fontsLoaded.value
+  const full = String(value ?? '')
+  for (const size of sizes) {
+    if (textWidth(full, weight, size) <= maxWidth) return { text: full, size, full: '' }
+  }
+  const size = sizes[sizes.length - 1]
+  const chars = Array.from(full)
+  while (chars.length > 1 && textWidth(chars.join('') + '…', weight, size) > maxWidth) chars.pop()
+  return { text: chars.join('') + '…', size, full }
+}
+const fitName = (value, boxWidth) => fit(value, boxWidth - TEXT_X - TEXT_PAD, 700, [15, 13.5, 12.5])
+const fitSub = (value, boxWidth) => fit(value, boxWidth - TEXT_X - TEXT_PAD, 600, [12.5, 11.5])
 
 function hostOf(url) {
   try {
@@ -102,7 +122,10 @@ export default {
           status: { level: PHASE_LEVEL[st.controller.phase] || 'neutral', label: st.controller.phase_label },
         },
         { id: 'panel', x: X_LEFT, y: TOP + ROW * 2, title: 'Pterodactyl', sub: panel.label || hostOf(ptero.url), status: panel },
-      ].map((box) => ({ ...box, w: BOX_W, aria: `${box.title}：${box.status.label || '正常'}` }))
+      ].map((box) => ({
+        ...box, w: BOX_W, name: fitName(box.title, BOX_W), note: box.sub ? fitSub(box.sub, BOX_W) : null,
+        aria: `${box.title}：${box.status.label || '正常'}`,
+      }))
     })
 
     // 右欄：每台節點一列；完整模式下列高跟著伺服器數量長
@@ -111,13 +134,22 @@ export default {
       let y = TOP
       const push = (id, agent, title, status, hosted) => {
         const pills = showServers.value
-          ? hosted.map((server, i) => ({ id: `server-${server.identifier}`, server, y: y + i * PILL_PITCH, status: serverStatus(server) }))
+          ? hosted.map((server, i) => {
+              const state = serverStatus(server)
+              // 沒在運行時右邊要放狀態文字，名稱可用的寬度比較少
+              const room = PILL_W - 27 - TEXT_PAD - (state.level === 'good' ? 0 : 56)
+              return {
+                id: `server-${server.identifier}`, server, y: y + i * PILL_PITCH, status: state,
+                name: fit(server.name, room, 600, [13.5, 12.5]),
+              }
+            })
           : []
         const blockH = Math.max(BOX_H, pills.length * PILL_PITCH - (PILL_PITCH - PILL_H))
         const online = status.level === 'good'
+        const sub = props.compact && online ? '' : status.label
         list.push({
-          id, agent, title, status, pills, x: X_NODE, y, w: NODE_W, cy: y + BOX_H / 2,
-          sub: props.compact && online ? '' : status.label,
+          id, agent, title, status, pills, x: X_NODE, y, w: NODE_W, cy: y + BOX_H / 2, sub,
+          name: fitName(title, NODE_W), note: sub ? fitSub(sub, NODE_W) : null,
           aria: `${title}：${online ? '在線' : status.label}`,
         })
         y += blockH + 30
@@ -214,7 +246,7 @@ export default {
     const boxes = computed(() => [...fixed.value, ...nodes.value.list])
     const pills = computed(() => nodes.value.list.flatMap((n) => n.pills))
 
-    return { W, H, BOX_H, PILL_W, PILL_H, X_PILL, boxes, pills, edges, serverLinks, fit }
+    return { W, H, BOX_H, PILL_W, PILL_H, X_PILL, TEXT_X, boxes, pills, edges, serverLinks }
   },
   template: /* html */ `
     <div class="topo-graph">
@@ -235,8 +267,9 @@ export default {
            :data-node="box.id" @click="$emit('select', box.id)" @keydown.enter="$emit('select', box.id)">
           <rect class="tg-box" :width="box.w" :height="BOX_H" rx="16" />
           <circle class="tg-dot" cx="22" :cy="BOX_H / 2" r="5" />
-          <text class="tg-name" x="38" :y="box.sub ? 26 : 35">{{ fit(box.title, 13) }}</text>
-          <text v-if="box.sub" class="tg-sub" x="38" y="45">{{ fit(box.sub, 17) }}</text>
+          <title v-if="box.name.full">{{ box.name.full }}</title>
+          <text class="tg-name" :x="TEXT_X" :y="box.note ? 26 : 35" :font-size="box.name.size">{{ box.name.text }}</text>
+          <text v-if="box.note" class="tg-sub" :x="TEXT_X" y="45" :font-size="box.note.size">{{ box.note.text }}</text>
         </g>
 
         <g v-for="pill in pills" :key="pill.id" class="tg-pill" :class="[pill.status.level, { selected: selected === pill.id }]"
@@ -245,8 +278,9 @@ export default {
            @click="$emit('select', pill.id)" @keydown.enter="$emit('select', pill.id)">
           <rect class="tg-box" :width="PILL_W" :height="PILL_H" rx="14" />
           <circle class="tg-dot" cx="15" :cy="PILL_H / 2" r="4" />
-          <text class="tg-pill-name" x="27" :y="PILL_H / 2 + 4.5">{{ fit(pill.server.name, pill.status.level === 'good' ? 20 : 13) }}</text>
-          <text v-if="pill.status.level !== 'good'" class="tg-sub" :x="PILL_W - 12" :y="PILL_H / 2 + 4.5" text-anchor="end">{{ pill.status.label }}</text>
+          <title v-if="pill.name.full">{{ pill.name.full }}</title>
+          <text class="tg-pill-name" x="27" :y="PILL_H / 2 + 4.5" :font-size="pill.name.size">{{ pill.name.text }}</text>
+          <text v-if="pill.status.level !== 'good'" class="tg-sub" font-size="12.5" :x="PILL_W - 12" :y="PILL_H / 2 + 4.5" text-anchor="end">{{ pill.status.label }}</text>
         </g>
       </svg>
     </div>`,
