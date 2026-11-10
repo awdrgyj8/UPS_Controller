@@ -5,7 +5,6 @@
     uv run main.py --no-web      # 只執行控制迴圈（與舊版行為相同）
 """
 import argparse
-import os
 
 from Core.config import load_settings
 
@@ -21,10 +20,10 @@ def parse_args():
 
 def build(settings):
     """建立控制服務、測試中心與（模擬模式下的）模擬環境。"""
+    from Core import console_view
     from Core.controller import ControllerService, PowerStateStore
     from Core.diagnostics import DiagnosticsRunner
     from Core.state import SystemState
-    from Core import console_view
 
     simulator = None
     if settings.simulate:
@@ -33,13 +32,14 @@ def build(settings):
         simulator = SimEnvironment(
             on_change=lambda data: state.set("simulation", data),
             log=lambda level, message: state.add_event(level, "sim", message),
+            agents=settings.agent_info()[0],   # 有設定 AgentInfo 就模擬同一批節點，否則用內建的三台
         )
-        drivers = SimDrivers(simulator)
+        drivers = SimDrivers(simulator, settings)
         power_store = PowerStateStore(None)
     else:
         from Core.drivers import RealDrivers
         state = SystemState(settings, "real")
-        drivers = RealDrivers()
+        drivers = RealDrivers(settings)
         power_store = PowerStateStore(settings.power_state_path)
 
     service = ControllerService(settings, drivers, state, power_store, console_view=console_view)
@@ -75,6 +75,7 @@ def main():
         return
 
     import uvicorn
+
     from Web.server import create_app
 
     app = create_app(service, diagnostics, simulator, scenarios)

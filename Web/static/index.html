@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UPS Controller</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='7' fill='%232f5bff'/%3E%3Cpath d='M13 4 6.5 13H11l-.8 7L17 11h-4.5z' fill='%23fff'/%3E%3C/svg%3E" />
+    <script>
+      // 第一次繪製前就決定深淺色，避免閃一下
+      ;(function () {
+        var saved = ''
+        try {
+          saved = localStorage.getItem('ups-controller-theme') || ''
+        } catch (e) {}
+        var root = document.documentElement
+        root.dataset.theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+        root.dataset.power = 'unknown'
+      })()
+    </script>
+    <link rel="preload" href="fonts/bricolage-grotesque.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="css/tokens.css" />
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/graph.css" />
+    <link rel="stylesheet" href="css/views/overview.css" />
+    <link rel="stylesheet" href="css/views/topology.css" />
+    <link rel="stylesheet" href="css/views/ups.css" />
+    <link rel="stylesheet" href="css/views/nodes.css" />
+    <link rel="stylesheet" href="css/views/tests.css" />
+    <link rel="stylesheet" href="css/views/logs.css" />
+    <script type="importmap">
+      { "imports": { "vue": "./vendor/vue.esm-browser.prod.js" } }
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

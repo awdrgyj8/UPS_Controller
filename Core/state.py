@@ -1,9 +1,14 @@
-"""執行期共享狀態：控制迴圈、監控執行緒與 Web API 共用，所有存取都經過鎖。"""
+"""執行期共享狀態：控制迴圈、監控執行緒與 Web API 共用，所有存取都經過鎖。
+
+資料的形狀定義在 Core/models.py。
+"""
 import copy
 import socket
 import threading
 import time
 from collections import deque
+
+from Core.models import AppState, ControllerState, Event, Sample, StatusFlag
 
 # NUT ups.status 旗標說明（level 對應介面的狀態色：good / neutral / warning / serious / critical）
 UPS_STATUS_FLAGS = {
@@ -41,7 +46,7 @@ def describe_status_flags(status):
     flags = []
     for token in (status or "").split():
         label, level = UPS_STATUS_FLAGS.get(token, (token, "neutral"))
-        flags.append({"code": token, "label": label, "level": level})
+        flags.append(StatusFlag(code=token, label=label, level=level))
     return flags
 
 
@@ -57,57 +62,41 @@ class SystemState:
         self._history_seq = 0
         self._events = deque(maxlen=self.EVENT_LIMIT)
         self._event_seq = 0
-        now = time.time()
-        self._data = {
-            "mode": mode,
-            "started_at": now,
-            "controller": {
-                "hostname": socket.gethostname(),
-                "phase": "starting",
-                "phase_label": PHASE_LABELS["starting"],
-                "decision": "等待第一次輪詢",
-                "expected_power_state": None,
-                "paused": False,
-                "cycle_count": 0,
-                "last_cycle_at": None,
-                "next_cycle_at": None,
-                "sequence": None,
-                "last_sequence": None,
-            },
-            "nut": {"host": "", "port": "", "ups_name": "", "connected": None, "latency_ms": None,
-                     "error": "", "last_update": None},
-            "ups": {"ok": None, "power": None, "status": "UNKNOWN", "status_flags": [], "battery": None,
-                    "error": "", "variables": {}, "updated_at": None},
-            "agents": [],
-            "agent_config_error": "",
-            "agents_updated_at": None,
-            "ptero": {"configured": None, "url": "", "ok": None, "error": "", "servers": [], "nodes": [],
-                      "updated_at": None},
-            "diagnostics": None,
-            "scenario": None,
-            "simulation": None,
-        }
+        self._data = AppState(
+            mode=mode,
+            started_at=time.time(),
+            controller=ControllerState(
+                hostname=socket.gethostname(),
+                phase_label=PHASE_LABELS["starting"],
+                decision="等待第一次輪詢",
+            ),
+        )
 
-    # ---- 一般更新 ----
+    # ---- 讀寫 ----
     def _bump(self):
         self.version += 1
 
     def update(self, section, **values):
+        """更新某一區的幾個欄位，例如 update("ups", battery=78)。欄位名稱寫錯會報錯。"""
         with self._lock:
-            self._data[section].update(values)
+            target = getattr(self._data, section)
+            for name, value in values.items():
+                setattr(target, name, value)
             self._bump()
 
     def set(self, section, value):
+        """整個換掉某一區，例如 set("diagnostics", DiagnosticsState(...))。"""
         with self._lock:
-            self._data[section] = value
+            setattr(self._data, section, value)
             self._bump()
 
     def get(self, section):
+        """取得某一區的複本（可以放心讀，改它不會影響共享狀態）。"""
         with self._lock:
-            return copy.deepcopy(self._data[section])
+            return copy.deepcopy(getattr(self._data, section))
 
     def mutate(self, fn):
-        """在鎖內直接修改資料（fn 收到內部 dict）。"""
+        """在鎖內直接修改資料：fn 收到整份 AppState，回傳值會原樣傳回。"""
         with self._lock:
             result = fn(self._data)
             self._bump()
@@ -117,26 +106,22 @@ class SystemState:
     def add_event(self, level, source, message):
         with self._lock:
             self._event_seq += 1
-            self._events.append({
-                "id": self._event_seq,
-                "ts": time.time(),
-                "level": level,
-                "source": source,
-                "message": message,
-            })
+            self._events.append(Event(id=self._event_seq, ts=time.time(), level=level, source=source,
+                                      message=str(message)))
             self._bump()
 
     def events(self, limit=200, level=None):
         with self._lock:
             items = list(self._events)
         if level:
-            items = [item for item in items if item["level"] == level]
+            items = [item for item in items if item.level == level]
         return items[-limit:]
 
-    def add_sample(self, sample):
+    def add_sample(self, **reading):
+        """記錄一次 UPS 讀數（t、battery、load…），回傳加上序號的 Sample。"""
         with self._lock:
             self._history_seq += 1
-            sample = dict(sample, seq=self._history_seq)
+            sample = Sample(seq=self._history_seq, **reading)
             self._history.append(sample)
             return sample
 
@@ -144,18 +129,23 @@ class SystemState:
         with self._lock:
             items = list(self._history)
         if since_ts is not None:
-            items = [item for item in items if item["t"] >= since_ts]
-        return [item for item in items if item["seq"] > since_seq]
+            items = [item for item in items if item.t >= since_ts]
+        return [item for item in items if item.seq > since_seq]
 
     @property
     def history_seq(self):
         with self._lock:
             return self._history_seq
 
-    def snapshot(self, event_limit=80):
+    def snapshot(self, event_limit=80, strict=False):
+        """整份狀態轉成可以直接輸出 JSON 的 dict（形狀見 models.Snapshot）。
+
+        strict=True 時，欄位的值與宣告的型別不符會拋出例外，供測試使用；平常只輸出，不因此失敗。
+        """
+        warnings = "error" if strict else False
         with self._lock:
-            data = copy.deepcopy(self._data)
-            data["events"] = list(self._events)[-event_limit:]
+            data = self._data.model_dump(mode="json", warnings=warnings)
+            data["events"] = [event.model_dump() for event in list(self._events)[-event_limit:]]
             data["version"] = self.version
         data["server_time"] = time.time()
         data["settings"] = self.settings.public_dict()

@@ -4,14 +4,13 @@
 因此可以完整測試「停電 → 關閉伺服器 → 關閉節點 → 復電 → WOL 開機」的整個過程，
 而且不會對任何真實設備送出指令。
 """
-import json
-import os
 import random
 import re
 import threading
 import time
 import uuid
 
+from Api.wake_on_lan import is_valid_mac
 from Core.drivers import DriverError
 
 # 故障注入選項
@@ -39,18 +38,6 @@ _RUNTIME_AT_30_LOAD = 1500.0
 _FULL_CHARGE_SECONDS = 1800.0
 _AGENT_BOOT_SECONDS = 6.0
 _AGENT_SHUTDOWN_SECONDS = 2.0
-
-
-def _load_agent_templates():
-    raw = os.getenv("AgentInfo")
-    if raw:
-        try:
-            agents = json.loads(raw)
-            if isinstance(agents, list) and agents:
-                return agents
-        except json.JSONDecodeError:
-            pass
-    return _DEFAULT_AGENTS
 
 
 class SimAgent:
@@ -125,11 +112,12 @@ class SimServer:
 class SimEnvironment:
     TICK_SECONDS = 0.25
 
-    def __init__(self, on_change=None, log=None):
+    def __init__(self, on_change=None, log=None, agents=None):
+        """agents：要模擬的節點清單（AgentInfo 的格式），沒給就用內建的三台。"""
         self._lock = threading.RLock()
         self._on_change = on_change
         self._log = log or (lambda level, message: None)
-        templates = _load_agent_templates()
+        templates = agents or _DEFAULT_AGENTS
         self.agents = [SimAgent(index, template) for index, template in enumerate(templates, start=1)]
         names = list(_GAME_SERVERS)
         random.shuffle(names)
@@ -402,15 +390,18 @@ class SimDrivers:
     """與 RealDrivers 相同介面的模擬實作。"""
     mode = "simulation"
 
-    def __init__(self, env):
+    def __init__(self, env, settings=None):
+        """settings 有給的話，介面上顯示的 NUT 位址與面板網址沿用實機設定。"""
         self.env = env
+        self.settings = settings
 
     # ---- NUT ----
     def nut_target(self):
+        s = self.settings
         return {
-            "host": os.getenv("NUT_ServerIP") or "192.168.50.10",
-            "port": os.getenv("NUT_ServerPort") or "3493",
-            "ups_name": os.getenv("NUT_UPS_NAME") or "ups",
+            "host": (s and s.nut_host) or "192.168.50.10",
+            "port": str((s and s.nut_port) or 3493),
+            "ups_name": (s and s.nut_ups_name) or "ups",
             "auth": False,
         }
 
@@ -423,7 +414,7 @@ class SimDrivers:
         return True
 
     def ptero_url(self):
-        return os.getenv("PteroApi_Url") or "https://panel.example.com"
+        return (self.settings and self.settings.ptero_url) or "https://panel.example.com"
 
     def ptero_info(self):
         # 模擬的 node 與 Agent 一對一且 fqdn = Agent IP，自動比對即可；不讀取實機的 PteroInfo
@@ -575,5 +566,4 @@ class SimDrivers:
         return True
 
     def valid_mac(self, mac):
-        from Api.WakeOnLan import isValidMac
-        return isValidMac(mac)
+        return is_valid_mac(mac)

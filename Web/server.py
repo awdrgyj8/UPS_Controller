@@ -1,4 +1,4 @@
-"""Web 介面後端：提供 REST API、SSE 即時串流，並伺服 WebUI 編譯後的靜態檔案。"""
+"""Web 介面後端：提供 REST API、SSE 即時串流，並直接送出 Web/static 裡的前端檔案（不需要編譯）。"""
 import asyncio
 import hmac
 import json
@@ -6,12 +6,30 @@ import time
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-BASE_DIR = Path(__file__).resolve().parents[1]
-DIST_DIR = BASE_DIR / "WebUI" / "dist"
+from Core.models import Event, Sample, Snapshot
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+class FrontendFiles(StaticFiles):
+    """前端是未打包的原始檔，檔名不帶版本：要求瀏覽器每次都先向伺服器確認，更新後才不會用到舊檔。"""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+class HistoryResponse(BaseModel):
+    samples: list[Sample]
+
+
+class EventsResponse(BaseModel):
+    events: list[Event]
 
 
 class PowerStateBody(BaseModel):
@@ -59,17 +77,21 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
     def health():
         return {"ok": True, "mode": service.drivers.mode, "auth_required": bool(settings.web_token)}
 
-    @app.get("/api/state", dependencies=auth)
+    # 這三個端點直接回傳 JSONResponse：response_model 只用來產生 /api/docs 的欄位說明，
+    # 不在輸出時再驗證一次，設備回傳奇怪的資料時介面仍然拿得到狀態。
+    @app.get("/api/state", dependencies=auth, response_model=Snapshot)
     def get_state():
-        return state.snapshot()
+        return JSONResponse(state.snapshot())
 
-    @app.get("/api/history", dependencies=auth)
+    @app.get("/api/history", dependencies=auth, response_model=HistoryResponse)
     def get_history(minutes: float = 60):
-        return {"samples": state.history(since_ts=time.time() - minutes * 60)}
+        samples = state.history(since_ts=time.time() - minutes * 60)
+        return JSONResponse({"samples": [sample.model_dump() for sample in samples]})
 
-    @app.get("/api/events", dependencies=auth)
+    @app.get("/api/events", dependencies=auth, response_model=EventsResponse)
     def get_events(limit: int = 500, level: str | None = None):
-        return {"events": state.events(limit=min(limit, 1000), level=level)}
+        events = state.events(limit=min(limit, 1000), level=level)
+        return JSONResponse({"events": [event.model_dump() for event in events]})
 
     @app.get("/api/stream", dependencies=auth)
     async def stream(request: Request):
@@ -83,8 +105,8 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
                     yield f"event: state\ndata: {json.dumps(state.snapshot(), ensure_ascii=False)}\n\n"
                 samples = state.history(since_seq=last_seq)
                 if samples:
-                    last_seq = samples[-1]["seq"]
-                    yield f"event: samples\ndata: {json.dumps(samples)}\n\n"
+                    last_seq = samples[-1].seq
+                    yield f"event: samples\ndata: {json.dumps([sample.model_dump() for sample in samples])}\n\n"
                 if time.time() - last_beat > 15:
                     last_beat = time.time()
                     yield ": keep-alive\n\n"
@@ -101,8 +123,8 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
 
     @app.post("/api/control/refresh", dependencies=auth)
     def control_refresh():
-        service.read_ups()
-        service.refresh_status()
+        service.monitor.read_ups()
+        service.monitor.refresh_status()
         return {"ok": True}
 
     @app.post("/api/control/pause", dependencies=auth)
@@ -123,7 +145,7 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
         try:
             return service.agent_action(index, action)
         except KeyError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail=str(e)) from e
 
     # ---- 測試中心 ----
     @app.post("/api/diagnostics/{kind}", dependencies=auth)
@@ -131,7 +153,7 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
         try:
             started = diagnostics.start(kind)
         except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail=str(e)) from e
         if not started:
             raise HTTPException(status_code=409, detail="已有測試正在執行")
         return {"ok": True}
@@ -151,7 +173,7 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
         try:
             started = scenarios.start(name)
         except KeyError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail=str(e)) from e
         if not started:
             raise HTTPException(status_code=409, detail="已有情境測試正在執行")
         return {"ok": True}
@@ -193,7 +215,7 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
         try:
             simulator.set_agent_fault(index, body.fault)
         except (KeyError, ValueError) as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise HTTPException(status_code=400, detail=str(e)) from e
         return {"ok": True}
 
     @app.post("/api/sim/agents/{index}/power", dependencies=auth)
@@ -202,7 +224,7 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
         try:
             simulator.set_agent_power(index, body.power)
         except KeyError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail=str(e)) from e
         return {"ok": True}
 
     @app.post("/api/sim/servers/{identifier}/stuck", dependencies=auth)
@@ -211,7 +233,7 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
         try:
             simulator.set_server_stuck(identifier, body.value)
         except KeyError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail=str(e)) from e
         return {"ok": True}
 
     @app.post("/api/sim/reset", dependencies=auth)
@@ -224,17 +246,7 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
         service.trigger_poll()
         return {"ok": True}
 
-    # ---- 前端靜態檔 ----
-    if (DIST_DIR / "index.html").exists():
-        app.mount("/", StaticFiles(directory=DIST_DIR, html=True), name="webui")
-    else:
-        @app.get("/", response_class=HTMLResponse)
-        def missing_frontend():
-            return """<!doctype html><meta charset="utf-8"><title>UPS Controller</title>
-<body style="font-family:system-ui;padding:2rem;max-width:40rem;margin:auto">
-<h1>UPS Controller</h1><p>API 已啟動，但找不到前端編譯檔 <code>WebUI/dist</code>。</p>
-<pre>cd WebUI
-npm install
-npm run build</pre><p>API 文件：<a href="/api/docs">/api/docs</a></p></body>"""
+    # ---- 前端 ----
+    app.mount("/", FrontendFiles(directory=STATIC_DIR, html=True), name="frontend")
 
     return app

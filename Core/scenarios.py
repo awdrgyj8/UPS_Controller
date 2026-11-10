@@ -2,6 +2,8 @@
 import threading
 import time
 
+from Core.models import ScenarioState, ScenarioStep
+
 
 class ScenarioFailed(Exception):
     pass
@@ -63,10 +65,8 @@ class ScenarioRunner:
             self._running = True
         self._cancel.clear()
         self._started_at = time.time()
-        self.state.set("scenario", {
-            "id": name, "title": self.SCENARIOS[name]["title"], "running": True, "result": "running",
-            "started_at": self._started_at, "finished_at": None, "detail": "", "steps": [],
-        })
+        self.state.set("scenario", ScenarioState(id=name, title=self.SCENARIOS[name]["title"],
+                                                 started_at=self._started_at))
         threading.Thread(target=self._run, args=(name,), name=f"scenario-{name}", daemon=True).start()
         return True
 
@@ -80,8 +80,7 @@ class ScenarioRunner:
             if self.service.paused:
                 raise ScenarioFailed("自動控制已暫停，請先恢復自動控制")
             getattr(self, f"_scenario_{name}")()
-            steps = self.state.get("scenario")["steps"]
-            if any(step["status"] == "warn" for step in steps):
+            if any(step.status == "warn" for step in self.state.get("scenario").steps):
                 result, detail = "warn", "流程完成，但發現需要注意的行為（見黃色步驟）"
         except ScenarioFailed as e:
             result, detail = "fail", str(e)
@@ -93,11 +92,12 @@ class ScenarioRunner:
             self._cleanup()
 
             def finish(data):
-                scenario = data["scenario"]
-                scenario.update(running=False, result=result, detail=detail, finished_at=time.time())
-                for step in scenario["steps"]:
-                    if step["status"] in ("running", "pending"):
-                        step["status"] = "fail" if result == "fail" else "skip"
+                scenario = data.scenario
+                scenario.running, scenario.result, scenario.detail = False, result, detail
+                scenario.finished_at = time.time()
+                for step in scenario.steps:
+                    if step.status in ("running", "pending"):
+                        step.status = "fail" if result == "fail" else "skip"
 
             self.state.mutate(finish)
             icon = {"pass": "✅", "warn": "⚠️", "fail": "❌", "cancelled": "⚠️"}[result]
@@ -124,19 +124,19 @@ class ScenarioRunner:
 
     # ------------------------------------------------------------------ 步驟工具
     def _add_step(self, label):
-        step = {"label": label, "status": "running", "detail": "", "started_at": time.time(), "duration_ms": None}
+        step = ScenarioStep(label=label, started_at=time.time())
 
         def apply(data):
-            data["scenario"]["steps"].append(step)
-            return len(data["scenario"]["steps"]) - 1
+            data.scenario.steps.append(step)
+            return len(data.scenario.steps) - 1
 
         return self.state.mutate(apply)
 
     def _finish_step(self, index, status, detail=""):
         def apply(data):
-            step = data["scenario"]["steps"][index]
-            step.update(status=status, detail=detail,
-                        duration_ms=round((time.time() - step["started_at"]) * 1000))
+            step = data.scenario.steps[index]
+            step.status, step.detail = status, detail
+            step.duration_ms = round((time.time() - step.started_at) * 1000)
 
         self.state.mutate(apply)
 
@@ -194,19 +194,19 @@ class ScenarioRunner:
 
     def _all_agents_online(self):
         agents = self._agents()
-        return bool(agents) and all(agent["online"] for agent in agents)
+        return bool(agents) and all(agent.online for agent in agents)
 
     def _online_count(self):
-        return f"在線 {sum(1 for a in self._agents() if a['online'])}/{len(self._agents())}"
+        return f"在線 {sum(1 for a in self._agents() if a.online)}/{len(self._agents())}"
 
     def _controller(self):
         return self.state.get("controller")
 
     def _sequence(self, kind=None):
-        sequence = self._controller()["sequence"]
-        if sequence is None or sequence["started_at"] < self._started_at:
+        sequence = self._controller().sequence
+        if sequence is None or sequence.started_at < self._started_at:
             return None
-        if kind and sequence["kind"] != kind:
+        if kind and sequence.kind != kind:
             return None
         return sequence
 
@@ -214,8 +214,8 @@ class ScenarioRunner:
         sequence = self._sequence()
         if sequence is None:
             return None
-        for step in sequence["steps"]:
-            if step["id"] == step_id:
+        for step in sequence.steps:
+            if step.id == step_id:
                 return step
         return None
 
@@ -250,10 +250,10 @@ class ScenarioRunner:
         threshold = self._threshold()
         self._prepare()
         self.action("切斷市電", lambda: self.env.set_grid(False))
-        self.wait_for("控制器偵測到 UPS 改由電池供電", lambda: self.state.get("ups")["power"] is False, 10,
-                      lambda: f"UPS 狀態 {self.state.get('ups')['status']}")
-        self.wait_for("電量高於門檻：控制器持續監控、不動作", lambda: self._controller()["phase"] == "on_battery", 10,
-                      lambda: self._controller()["decision"])
+        self.wait_for("控制器偵測到 UPS 改由電池供電", lambda: self.state.get("ups").power is False, 10,
+                      lambda: f"UPS 狀態 {self.state.get('ups').status}")
+        self.wait_for("電量高於門檻：控制器持續監控、不動作", lambda: self._controller().phase == "on_battery", 10,
+                      lambda: self._controller().decision)
 
         def fast_forward():
             self.env.set_battery(threshold + 2)
@@ -262,18 +262,18 @@ class ScenarioRunner:
         self.action(f"時間快轉：電量降到 {threshold + 2}%、放電速度 ×20", fast_forward)
         self.wait_for(f"電量降至 {threshold}% 以下，控制器啟動關機程序",
                       lambda: self._sequence("shutdown") is not None, 40,
-                      lambda: f"電量 {self.state.get('ups')['battery']}%")
+                      lambda: f"電量 {self.state.get('ups').battery}%")
         self.env.set_speed(10)
         self.wait_for("面板伺服器全部關閉", lambda: all(s.state == "offline" for s in self.env.servers), 40,
                       lambda: "、".join(f"{s.name}:{s.state}" for s in self.env.servers))
         self.wait_for("所有節點收到簽章關機請求並關機", lambda: self._sim_agents_power("off"), 30,
                       lambda: "、".join(f"{a.name}:{a.power}" for a in self.env.agents))
         self.wait_for("powerState 更新為「關機」", lambda: self.service.power_store.expected() is False, 10)
-        self.wait_for("控制器進入「節點已關機，等待市電恢復」", lambda: self._controller()["phase"] == "nodes_off", 10,
-                      lambda: self._controller()["phase_label"])
+        self.wait_for("控制器進入「節點已關機，等待市電恢復」", lambda: self._controller().phase == "nodes_off", 10,
+                      lambda: self._controller().phase_label)
         self.action("恢復市電", lambda: self.env.set_grid(True))
         self.wait_for("控制器送出 Wake-on-LAN",
-                      lambda: (self._sequence("wake") or {}).get("result") == "success", 30,
+                      lambda: getattr(self._sequence("wake"), "result", None) == "success", 30,
                       lambda: f"已送出 {self.env.wol_packets} 個封包")
         self.wait_for("powerState 更新為「開機」", lambda: self.service.power_store.expected() is True, 10)
         self.wait_for("所有節點開機並重新上線", self._all_agents_online, 40, self._online_count)
@@ -281,12 +281,12 @@ class ScenarioRunner:
     def _scenario_power_blip(self):
         self._prepare()
         self.action("切斷市電", lambda: self.env.set_grid(False))
-        self.wait_for("控制器偵測到電池供電並持續監控", lambda: self._controller()["phase"] == "on_battery", 10,
-                      lambda: self._controller()["decision"])
+        self.wait_for("控制器偵測到電池供電並持續監控", lambda: self._controller().phase == "on_battery", 10,
+                      lambda: self._controller().decision)
         self.pause("維持停電 4 秒", 4)
         self.action("恢復市電", lambda: self.env.set_grid(True))
-        self.wait_for("控制器回到「監控中」", lambda: self._controller()["phase"] == "monitoring"
-                      and self.state.get("ups")["power"] is True, 10)
+        self.wait_for("控制器回到「監控中」", lambda: self._controller().phase == "monitoring"
+                      and self.state.get("ups").power is True, 10)
         self.expect("沒有執行任何關機程序", self._sequence() is None,
                     "電量未達門檻，控制器未動作", "控制器不應啟動關機程序")
         self.expect("所有節點維持在線", self._all_agents_online(), self._online_count(), self._online_count())
@@ -300,8 +300,8 @@ class ScenarioRunner:
         self.wait_for("控制器啟動關機程序", lambda: self._sequence("shutdown") is not None, 15)
         timeout = self.settings.server_stop_max_attempts * self.settings.server_stop_check_interval + 20
         self.wait_for("等待伺服器關機逾時 → 跳過節點關機",
-                      lambda: (self._sequence_step("wait_servers") or {}).get("status") == "failed", timeout,
-                      lambda: (self._sequence_step("wait_servers") or {}).get("detail", ""))
+                      lambda: getattr(self._sequence_step("wait_servers"), "status", None) == "failed", timeout,
+                      lambda: getattr(self._sequence_step("wait_servers"), "detail", ""))
         self.expect("沒有送出節點關機請求", all(agent.shutdown_requests == 0 for agent in self.env.agents),
                     "所有 Agent 皆未收到 /shutdown", "有 Agent 收到關機請求")
         self.expect("powerState 維持「開機」", self.service.power_store.expected() is True,
@@ -313,8 +313,8 @@ class ScenarioRunner:
         self.action(f"故障注入：{target.name} 拒絕簽章", lambda: self.env.set_agent_fault(target.index, "reject"))
         self._outage_at_threshold()
         self.wait_for("控制器送出節點關機請求後回報失敗",
-                      lambda: (self._sequence_step("shutdown_agents") or {}).get("status") == "failed", 40,
-                      lambda: (self._sequence_step("shutdown_agents") or {}).get("detail", ""))
+                      lambda: getattr(self._sequence_step("shutdown_agents"), "status", None) == "failed", 40,
+                      lambda: getattr(self._sequence_step("shutdown_agents"), "detail", ""))
         self.expect("powerState 維持「開機」", self.service.power_store.expected() is True,
                     "依現行邏輯不更新電源狀態", "powerState 不應被更新")
         others = [agent for agent in self.env.agents if agent.index != target.index]
@@ -334,8 +334,8 @@ class ScenarioRunner:
         self.action("故障注入：Pterodactyl 面板無法連線", lambda: self.env.set_ptero_reachable(False))
         self._outage_at_threshold()
         self.wait_for("控制器嘗試關機程序但取不到伺服器清單",
-                      lambda: (self._sequence_step("list_servers") or {}).get("status") == "failed", 15,
-                      lambda: (self._sequence() or {}).get("detail", ""))
+                      lambda: getattr(self._sequence_step("list_servers"), "status", None) == "failed", 15,
+                      lambda: getattr(self._sequence(), "detail", ""))
         self.expect("節點未被關機", self._sim_agents_power("on"), "所有節點仍在運作", "有節點被關機")
         self.note("發現：面板故障時節點不會被關機",
                   "依現行邏輯，取不到伺服器清單就跳過節點關機；若停電持續，UPS 電量耗盡時節點會直接斷電。"
@@ -345,8 +345,8 @@ class ScenarioRunner:
         self._prepare()
         self.action("故障注入：NUT Server 斷線", lambda: self.env.set_nut_reachable(False))
         self.wait_for("控制器進入「UPS 讀取失敗」並略過控制流程",
-                      lambda: self._controller()["phase"] == "nut_error", 10,
-                      lambda: self._controller()["decision"])
+                      lambda: self._controller().phase == "nut_error", 10,
+                      lambda: self._controller().decision)
         self.expect("沒有執行任何關機或喚醒", self._sequence() is None, "控制器未動作", "不應執行任何程序")
         self.action("恢復 NUT 連線", lambda: self.env.set_nut_reachable(True))
-        self.wait_for("控制器回到「監控中」", lambda: self._controller()["phase"] == "monitoring", 10)
+        self.wait_for("控制器回到「監控中」", lambda: self._controller().phase == "monitoring", 10)
