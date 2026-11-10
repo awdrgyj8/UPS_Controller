@@ -1,0 +1,130 @@
+/* 設計 token：顏色、字體、圓角。所有頁面只用這裡的變數，不直接寫色碼。 */
+
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  src: url('../fonts/bricolage-grotesque.woff2') format('woff2');
+  font-weight: 200 800;
+  font-stretch: 75% 100%;
+  font-display: swap;
+}
+
+:root {
+  /* 拉丁字母與數字用 Bricolage Grotesque，中文落到系統黑體 */
+  --font: 'Bricolage Grotesque', 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  --bg: #eef1f6;
+  --ink: #0e1220;
+  --ink-2: #4b5368;
+  --ink-3: #7d869c;
+  --tile: #ffffff;
+  --sub: #f1f3f8;
+  --sub-2: #e6e9f1;
+  --line: rgba(14, 18, 32, 0.09);
+
+  /* 深色磚、萊姆磚：深淺色主題下都維持色塊 */
+  --deep: #10142a;
+  --on-deep: #f3f5ff;
+  --on-deep-2: #a2aac8;
+  --deep-chip: rgba(255, 255, 255, 0.08);
+  --lime: #d4f24a;
+  --on-lime: #141a05;
+
+  /* 狀態色：圓點用 --x，底色用 --x-bg，文字用 --x-ink */
+  --good: #1fbf5c;
+  --good-bg: #dff6e7;
+  --good-ink: #0b6b33;
+  --warn: #f59f0a;
+  --warn-bg: #ffefcc;
+  --warn-ink: #8a5300;
+  --bad: #e5303a;
+  --bad-bg: #ffe0e2;
+  --bad-ink: #b3141d;
+  /* 「資訊」固定用藍色，不跟著電源變色，免得停電時被看成警告 */
+  --info: #2f5bff;
+  --info-bg: #dbe5ff;
+  --info-ink: #0f1c57;
+  --mute: #9aa2b6;
+  --mute-bg: var(--sub);
+  --mute-ink: var(--ink-2);
+
+  --r-l: 32px;
+  --r-m: 24px;
+  --r-s: 14px;
+  --shadow: 0 12px 40px rgba(14, 18, 32, 0.18);
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg: #090b12;
+  --ink: #f1f3fa;
+  --ink-2: #b4bbcf;
+  --ink-3: #7c859d;
+  --tile: #161926;
+  --sub: #1f2333;
+  --sub-2: #2a2f43;
+  --line: rgba(255, 255, 255, 0.09);
+  --deep: #1a1e42;
+  --deep-chip: rgba(255, 255, 255, 0.09);
+
+  --good-bg: #123823;
+  --good-ink: #6fe3a0;
+  --warn-bg: #3d2c08;
+  --warn-ink: #ffc65c;
+  --bad: #ff5b63;
+  --bad-bg: #44151a;
+  --bad-ink: #ff8a90;
+  --info: #5f84ff;
+  --info-bg: #1b2a6e;
+  --info-ink: #c9d6ff;
+  --mute: #6f7890;
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+/* 強調色跟著電源走：市電藍靛、停電橘紅、讀不到 UPS 時灰藍 */
+:root[data-power='mains'] {
+  --a1: #2562f7;
+  --a2: #5b3df5;
+  --accent: #2f5bff;
+  --accent-ink: #2450e6;
+  --tint: #dbe5ff;
+  --on-tint: #0f1c57;
+  --glow: #6f9bff;
+  --headline: var(--ink);
+}
+:root[data-power='battery'] {
+  --a1: #e62e36;
+  --a2: #ff8a1f;
+  --accent: #f2501a;
+  --accent-ink: #d23a08;
+  --tint: #ffe2cf;
+  --on-tint: #4a1803;
+  --glow: #ffb066;
+  --headline: var(--accent-ink);
+}
+:root[data-power='unknown'] {
+  --a1: #4a536e;
+  --a2: #7a849f;
+  --accent: #5b6582;
+  --accent-ink: #4a536e;
+  --tint: #e1e5ee;
+  --on-tint: #1c2233;
+  --glow: #a8b0c6;
+  --headline: var(--ink);
+}
+:root[data-theme='dark'][data-power='mains'] {
+  --tint: #1b2a6e;
+  --on-tint: #e6ecff;
+  --accent-ink: #7fa2ff;
+}
+:root[data-theme='dark'][data-power='battery'] {
+  --tint: #55230c;
+  --on-tint: #ffe9db;
+  --accent-ink: #ff8f55;
+}
+:root[data-theme='dark'][data-power='unknown'] {
+  --tint: #262b3d;
+  --on-tint: #e8ebf5;
+  --accent-ink: #aab3cc;
+}

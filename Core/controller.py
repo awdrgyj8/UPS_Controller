@@ -130,6 +130,7 @@ class ControllerService:
         self._status_lock = threading.Lock()
         self._threads = []
         self._last_power = None
+        self._on_battery_since = None
         self._nut_connected = None
         self._ptero_ok = None
         Logger.addHook(self._on_log)
@@ -230,8 +231,13 @@ class ControllerService:
         if self._nut_connected is False:
             self.log("✅ NUT 連線恢復", source="nut")
         self._nut_connected = True
+        # 記下改由電池供電的起點，介面用來顯示已經停電多久
+        if snapshot["power"]:
+            self._on_battery_since = None
+        elif self._on_battery_since is None:
+            self._on_battery_since = now
         self.state.update("ups", **snapshot, status_flags=describe_status_flags(snapshot["status"]),
-                          variables=variables, updated_at=now)
+                          variables=variables, updated_at=now, on_battery_since=self._on_battery_since)
         self.state.update("nut", connected=True, error="", latency_ms=latency, last_update=now)
         self.state.add_sample({
             "t": now,

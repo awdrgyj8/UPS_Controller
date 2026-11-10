@@ -77,7 +77,7 @@ class SystemState:
             "nut": {"host": "", "port": "", "ups_name": "", "connected": None, "latency_ms": None,
                      "error": "", "last_update": None},
             "ups": {"ok": None, "power": None, "status": "UNKNOWN", "status_flags": [], "battery": None,
-                    "error": "", "variables": {}, "updated_at": None},
+                    "error": "", "variables": {}, "updated_at": None, "on_battery_since": None},
             "agents": [],
             "agent_config_error": "",
             "agents_updated_at": None,

@@ -1,4 +1,4 @@
-"""Web 介面後端：提供 REST API、SSE 即時串流，並伺服 WebUI 編譯後的靜態檔案。"""
+"""Web 介面後端：提供 REST API、SSE 即時串流，並直接送出 Web/static 裡的前端檔案（不需要編譯）。"""
 import asyncio
 import hmac
 import json
@@ -6,12 +6,20 @@ import time
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-BASE_DIR = Path(__file__).resolve().parents[1]
-DIST_DIR = BASE_DIR / "WebUI" / "dist"
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+class FrontendFiles(StaticFiles):
+    """前端是未打包的原始檔，檔名不帶版本：要求瀏覽器每次都先向伺服器確認，更新後才不會用到舊檔。"""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
 
 
 class PowerStateBody(BaseModel):
@@ -224,17 +232,7 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
         service.trigger_poll()
         return {"ok": True}
 
-    # ---- 前端靜態檔 ----
-    if (DIST_DIR / "index.html").exists():
-        app.mount("/", StaticFiles(directory=DIST_DIR, html=True), name="webui")
-    else:
-        @app.get("/", response_class=HTMLResponse)
-        def missing_frontend():
-            return """<!doctype html><meta charset="utf-8"><title>UPS Controller</title>
-<body style="font-family:system-ui;padding:2rem;max-width:40rem;margin:auto">
-<h1>UPS Controller</h1><p>API 已啟動，但找不到前端編譯檔 <code>WebUI/dist</code>。</p>
-<pre>cd WebUI
-npm install
-npm run build</pre><p>API 文件：<a href="/api/docs">/api/docs</a></p></body>"""
+    # ---- 前端 ----
+    app.mount("/", FrontendFiles(directory=STATIC_DIR, html=True), name="frontend")
 
     return app

@@ -1,0 +1,122 @@
+/* 連線拓撲圖（js/components/topology-graph.js）。一律畫在深色磚上，所以直接用 --on-deep 系列。 */
+.topo-graph {
+  overflow-x: auto;
+
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  text {
+    font-family: var(--font);
+    fill: var(--on-deep);
+  }
+
+  .tg-node,
+  .tg-pill {
+    cursor: pointer;
+    outline: none;
+  }
+  .tg-box {
+    fill: var(--deep-chip);
+    stroke: transparent;
+    stroke-width: 2;
+  }
+  .tg-node:hover .tg-box,
+  .tg-pill:hover .tg-box {
+    fill: rgba(255, 255, 255, 0.14);
+  }
+  .tg-node.selected .tg-box,
+  .tg-pill.selected .tg-box,
+  .tg-node:focus-visible .tg-box,
+  .tg-pill:focus-visible .tg-box {
+    stroke: var(--on-deep);
+  }
+  .tg-dot {
+    fill: var(--lv, var(--mute));
+  }
+  .tg-name {
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .tg-pill-name {
+    font-size: 13.5px;
+    font-weight: 600;
+  }
+  .tg-sub,
+  .tg-link-label {
+    font-size: 12.5px;
+    font-weight: 600;
+    fill: var(--on-deep-2);
+  }
+  .critical .tg-name,
+  .critical .tg-sub {
+    fill: #ff8a90;
+  }
+
+  .tg-wire {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .power .tg-wire {
+    stroke: var(--glow);
+    stroke-width: 5;
+    transition: stroke 0.5s;
+  }
+  .power.s-idle .tg-wire,
+  .power.s-unknown .tg-wire,
+  .power.s-broken .tg-wire {
+    stroke: var(--on-deep-2);
+    stroke-width: 2;
+    stroke-dasharray: 3 8;
+    opacity: 0.6;
+  }
+  .data .tg-wire {
+    stroke: var(--on-deep-2);
+    stroke-width: 1.5;
+    opacity: 0.75;
+  }
+  .data.s-idle .tg-wire {
+    stroke-dasharray: 2 6;
+    opacity: 0.45;
+  }
+  .s-broken .tg-wire {
+    stroke: #ff5b63 !important;
+    stroke-dasharray: 3 8;
+    opacity: 1 !important;
+  }
+  .tg-cut circle {
+    fill: #ff5b63;
+  }
+  .tg-cut path {
+    fill: none;
+    stroke: #fff;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+  }
+  /* 流動的光點只在電池供電時出現，提醒電正在從電池流出去 */
+  .tg-flow {
+    fill: none;
+    stroke: #fff;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-dasharray: 2 20;
+    opacity: 0;
+  }
+  .tg-server-link {
+    fill: none;
+    stroke: var(--on-deep-2);
+    stroke-width: 1.5;
+    opacity: 0.4;
+  }
+}
+:root[data-power='battery'] .topo-graph .tg-flow {
+  opacity: 0.9;
+  animation: tg-flow 1s linear infinite;
+}
+@keyframes tg-flow {
+  to {
+    stroke-dashoffset: -22;
+  }
+}

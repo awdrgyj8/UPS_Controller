@@ -1,0 +1,317 @@
+/* 節點與伺服器頁 */
+.v-nodes {
+  /* ---------- 左欄：節點在線（萊姆磚）、伺服器運行（強調色淡磚） ---------- */
+  .side {
+    display: grid;
+    grid-auto-rows: 1fr;
+    gap: 16px;
+  }
+  .count {
+    justify-content: space-between;
+    gap: 20px;
+    min-height: 220px;
+
+    .big {
+      font-size: 104px;
+      letter-spacing: 0.03em;
+    }
+    .big.c4 {
+      font-size: 84px;
+    }
+    .big.c5 {
+      font-size: 66px;
+    }
+    .big em {
+      font-style: normal;
+      opacity: 0.4;
+    }
+    .icon-btn {
+      background: color-mix(in srgb, currentColor 10%, transparent);
+      color: inherit;
+    }
+  }
+  /* 一格一台伺服器，空心代表沒在運行 */
+  .pips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+
+    i {
+      width: 12px;
+      height: 12px;
+      border-radius: 4px;
+      background: var(--accent);
+    }
+    i.stopped {
+      background: transparent;
+      box-shadow: inset 0 0 0 2px color-mix(in srgb, currentColor 40%, transparent);
+    }
+  }
+
+  /* ---------- 節點磚 ---------- */
+  .agents {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+
+    /* 每排最多 --per-row 塊；放不下 300px 就自動少排一塊，最後一排撐滿 */
+    > * {
+      flex: 1 1 calc((100% - (var(--per-row) - 1) * 16px) / var(--per-row));
+      min-width: min(300px, 100%);
+    }
+  }
+  .no-agents {
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .agent {
+    container-type: inline-size;
+    padding: 24px;
+    gap: 18px;
+    transition: background 0.5s;
+
+    &.down {
+      background: var(--bad-bg);
+    }
+    &.down .agent-name,
+    .agent-error {
+      color: var(--bad-ink);
+    }
+    &.off {
+      background: var(--sub-2);
+    }
+    &.off .agent-name {
+      color: var(--ink-2);
+    }
+    &.moving {
+      background: var(--warn-bg);
+    }
+    /* 有底色的磚上，籤與按鈕改用白底才分得出來 */
+    &.down,
+    &.off,
+    &.moving {
+      .agent-head .pill,
+      .btn,
+      .select {
+        background: var(--tile);
+      }
+    }
+  }
+  .agent-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .agent-id {
+    min-width: 0;
+  }
+  .agent-name {
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1.15;
+  }
+  .agent-addr {
+    margin-top: 4px;
+    color: var(--ink-3);
+    font-weight: 600;
+  }
+  .agent-error {
+    margin-top: -8px;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+
+  .agent-body {
+    display: grid;
+    gap: 18px;
+  }
+  .meters {
+    display: grid;
+    gap: 14px;
+  }
+  .res-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 7px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .res-head .aside {
+    font-size: 14px;
+  }
+  .kv dd .pill {
+    margin-left: 6px;
+  }
+  .kv .caps {
+    font-size: 14px;
+    line-height: 24px;
+  }
+
+  /* 磚夠寬時（1、2 台節點）把用量排成一列，再寬就和明細左右並排 */
+  @container (min-width: 440px) {
+    .meters {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 20px;
+    }
+    .res-head {
+      flex-direction: column;
+      gap: 0;
+    }
+  }
+  @container (min-width: 760px) {
+    .agent-body {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 40px;
+      align-items: start;
+    }
+    .meters {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 14px;
+    }
+    .res-head {
+      flex-direction: row;
+      gap: 12px;
+    }
+    .agent-actions {
+      max-width: 420px;
+    }
+  }
+
+  .agent-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: auto;
+
+    .btn {
+      flex: 1;
+      padding: 9px 6px;
+    }
+  }
+  .last-result {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: -8px;
+    padding: 9px 14px;
+    border-radius: var(--r-s);
+    background: var(--lv-bg);
+    color: var(--lv-ink);
+    font-size: 14px;
+    font-weight: 600;
+
+    b {
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .result-text {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .result-ms {
+      margin-left: auto;
+      white-space: nowrap;
+      opacity: 0.75;
+    }
+  }
+  .agent.down .last-result,
+  .agent.moving .last-result {
+    background: var(--tile);
+  }
+
+  .sim-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-top: 16px;
+    border-top: 1.5px dashed var(--line);
+
+    .chip {
+      padding: 5px 10px;
+    }
+    .select {
+      flex: 1;
+      padding: 8px 12px;
+      font-size: 14px;
+    }
+  }
+
+  /* ---------- 伺服器（深色磚） ---------- */
+  .servers {
+    gap: 14px;
+
+    .notice {
+      margin: 0;
+    }
+    .table {
+      min-width: 660px;
+    }
+    .table th {
+      color: var(--on-deep-2);
+    }
+    .table td {
+      border-top-color: color-mix(in srgb, var(--on-deep) 8%, transparent);
+    }
+    /* 每台節點的第一列用較明顯的線分組 */
+    .table tr.first td {
+      border-top-color: color-mix(in srgb, var(--on-deep) 26%, transparent);
+    }
+    .node-cell {
+      font-size: 18px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .name-cell {
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    td:has(.pill) {
+      white-space: nowrap;
+    }
+    .aside {
+      color: var(--on-deep-2);
+      font-size: 14px;
+    }
+    .panel-node,
+    .assumed {
+      margin-left: 8px;
+    }
+    .empty {
+      color: var(--on-deep-2);
+    }
+    /* 深色底上的籤：用狀態色調出底色與字色，不依賴淺色主題的粉底 */
+    .pill {
+      background: color-mix(in srgb, var(--lv, var(--mute)) 22%, transparent);
+      color: color-mix(in srgb, var(--lv, var(--mute)) 55%, var(--on-deep));
+    }
+    .btn:not(.danger) {
+      background: var(--deep-chip);
+      color: var(--on-deep);
+    }
+  }
+
+  @media (max-width: 1100px) {
+    .side {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .count {
+      min-height: 0;
+    }
+    .count .big,
+    .count .big.c4 {
+      font-size: clamp(56px, 15vw, 96px);
+    }
+    .count .big.c5 {
+      font-size: clamp(44px, 12vw, 80px);
+    }
+    .agents {
+      gap: 12px;
+    }
+    .agent {
+      padding: 22px;
+    }
+  }
+}

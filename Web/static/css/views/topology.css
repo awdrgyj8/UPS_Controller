@@ -1,0 +1,63 @@
+/* 連線拓撲頁 */
+.v-topology {
+  align-items: start;
+
+  .graph {
+    grid-column: span 8;
+    padding-bottom: 22px;
+  }
+  .graph .topo-graph {
+    margin-top: 18px;
+  }
+  .layers {
+    display: flex;
+    gap: 6px;
+  }
+  .layers button {
+    padding: 7px 16px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--on-deep-2);
+    font-size: 14px;
+    font-weight: 700;
+    box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.18);
+  }
+  .layers button[aria-pressed='true'] {
+    background: var(--on-deep);
+    color: var(--deep);
+    box-shadow: none;
+  }
+
+  .detail {
+    grid-column: span 4;
+    position: sticky;
+    top: 16px;
+    gap: 16px;
+  }
+  .detail .tile-head {
+    flex-wrap: nowrap;
+  }
+  .detail .notice {
+    margin: 0;
+  }
+  .detail .btn {
+    align-self: flex-start;
+  }
+  .flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
+@media (max-width: 1100px) {
+  .v-topology {
+    .graph,
+    .detail {
+      grid-column: 1 / -1;
+    }
+    .detail {
+      position: static;
+    }
+  }
+}

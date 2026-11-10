@@ -1,0 +1,341 @@
+/* UPS 數據頁 */
+.v-ups {
+  @media (min-width: 1101px) {
+    .plate {
+      grid-column: span 5;
+      grid-row: span 2;
+    }
+    .battery {
+      grid-column: span 4;
+      grid-row: span 2;
+    }
+    .load,
+    .temp {
+      grid-column: span 3;
+    }
+    .feed-in {
+      grid-column: span 7;
+    }
+    .feed-out {
+      grid-column: span 5;
+    }
+  }
+
+  .reading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  .hz {
+    font-size: 22px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  /* 主角：UPS 銘牌 */
+  .plate {
+    min-height: 440px;
+    padding: 30px 32px;
+    transition: background 0.5s;
+  }
+  .plate::before {
+    content: '';
+    position: absolute;
+    width: 520px;
+    height: 520px;
+    right: -200px;
+    bottom: -300px;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, var(--glow), transparent);
+    opacity: 0.55;
+  }
+  .plate > * {
+    position: relative;
+  }
+  .flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .flag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--deep) 42%, transparent);
+    font-size: 14px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .model {
+    margin-top: 30px;
+    font-size: 72px;
+    font-weight: 800;
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+  }
+  .maker {
+    margin-top: 8px;
+    font-size: 20px;
+    font-weight: 700;
+    opacity: 0.85;
+  }
+  .plate-facts {
+    margin: auto 0 0;
+    padding-top: 28px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 24px;
+  }
+  .plate-facts dt {
+    font-size: 14px;
+    font-weight: 600;
+    opacity: 0.8;
+  }
+  .plate-facts dd {
+    margin: 2px 0 0;
+    font-size: 17px;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+  }
+
+  /* 電池 */
+  .battery .big {
+    margin-top: 10px;
+    font-size: 112px;
+  }
+  .battery.critical .big {
+    color: var(--bad-ink);
+  }
+  .battery.warning .big {
+    color: var(--warn-ink);
+  }
+  .bar {
+    position: relative;
+    margin: 22px 0 40px;
+  }
+  .bar .meter {
+    height: 16px;
+    border-radius: 8px;
+  }
+  .bar .meter > i {
+    border-radius: 8px;
+  }
+  .mark {
+    position: absolute;
+    top: -6px;
+    width: 3px;
+    height: 28px;
+    border-radius: 2px;
+    background: var(--ink);
+    transform: translateX(-50%);
+  }
+  .mark b {
+    position: absolute;
+    top: 34px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .battery .kv {
+    margin-top: auto;
+  }
+
+  /* 負載 */
+  .load {
+    min-height: 256px;
+  }
+  .load .big {
+    margin-top: 10px;
+    font-size: 84px;
+  }
+  .load .meter {
+    margin-top: 18px;
+    background: color-mix(in srgb, currentColor 14%, transparent);
+  }
+  .watts {
+    margin-top: auto;
+    padding-top: 16px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .watts b {
+    font-size: 28px;
+    font-weight: 800;
+  }
+  .watts span {
+    font-weight: 600;
+    opacity: 0.7;
+  }
+
+  .temp {
+    min-height: 168px;
+  }
+  .temp .big {
+    margin-top: auto;
+    font-size: 64px;
+  }
+
+  /* 輸入、輸出 */
+  .feed-in,
+  .feed-out {
+    min-height: 250px;
+  }
+  .feed-in .big,
+  .feed-out .big {
+    font-size: 76px;
+  }
+  .feed-in.down .big {
+    color: var(--bad);
+    font-weight: 900;
+  }
+  .window {
+    margin-top: auto;
+    padding-top: 30px;
+  }
+  .track {
+    position: relative;
+    height: 12px;
+    border-radius: 6px;
+    background: var(--deep-chip);
+  }
+  .track i {
+    position: absolute;
+    top: -8px;
+    width: 6px;
+    height: 28px;
+    border-radius: 3px;
+    background: var(--glow);
+    transform: translateX(-50%);
+    transition: left 0.6s;
+  }
+  .ends {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 14px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--on-deep-2);
+  }
+
+  /* 趨勢 */
+  .tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .charts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 18px;
+  }
+  .cell {
+    min-width: 0;
+    padding: 18px 18px 12px;
+    border-radius: var(--r-m);
+    background: var(--sub);
+  }
+  .cell h3 {
+    margin-bottom: 8px;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .cell h3 span {
+    margin-left: 8px;
+    color: var(--ink-3);
+    font-weight: 600;
+  }
+  .trend .table-wrap {
+    margin-top: 14px;
+    max-height: 460px;
+    overflow-y: auto;
+  }
+  .trend .table th {
+    position: sticky;
+    top: 0;
+    background: var(--tile);
+  }
+
+  /* NUT 變數 */
+  .nut .input {
+    width: 260px;
+    max-width: 100%;
+    min-height: 0;
+  }
+  .groups {
+    columns: 3 300px;
+    column-gap: 16px;
+    margin-top: 18px;
+  }
+  .group {
+    break-inside: avoid;
+    margin-bottom: 16px;
+    padding: 18px 20px 10px;
+    border-radius: var(--r-m);
+    background: var(--sub);
+  }
+  .group h3 {
+    margin-bottom: 6px;
+    font-size: 16px;
+    font-weight: 800;
+  }
+  .group dl {
+    margin: 0;
+  }
+  .group dl > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 8px 0;
+    border-top: 1.5px solid var(--line);
+  }
+  .group dl > div:first-child {
+    border-top: 0;
+  }
+  .group dt {
+    color: var(--ink-2);
+  }
+  .group dd {
+    margin: 0;
+    font-weight: 700;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 1100px) {
+    .plate {
+      min-height: 0;
+    }
+    .model {
+      font-size: 44px;
+    }
+    .battery .big {
+      font-size: 88px;
+    }
+    .load,
+    .temp,
+    .feed-in,
+    .feed-out {
+      min-height: 0;
+    }
+    .feed-in .big,
+    .feed-out .big {
+      font-size: 60px;
+    }
+    .temp .big {
+      margin-top: 10px;
+    }
+    .charts {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}

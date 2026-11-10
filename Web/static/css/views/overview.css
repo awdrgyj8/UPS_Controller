@@ -1,0 +1,456 @@
+/* 總覽頁 */
+.v-overview {
+  /* 主角：電池 */
+  .hero {
+    grid-column: 1 / span 5;
+    grid-row: span 2;
+    min-height: 468px;
+    padding: 30px 32px;
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 16px;
+    transition: background 0.5s;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    width: 520px;
+    height: 520px;
+    left: -180px;
+    bottom: -300px;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, var(--glow), transparent);
+    opacity: 0.55;
+  }
+  .hero-copy {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  /* 數字之間留空隙：不壓字寬、不收字距 */
+  .hero-num {
+    margin-top: 20px;
+    font-size: 132px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    line-height: 0.9;
+    white-space: nowrap;
+  }
+  .hero-num small {
+    font-size: 52px;
+    font-weight: 700;
+    letter-spacing: 0;
+    margin-left: 8px;
+  }
+  .hero-run {
+    margin-top: 24px;
+    font-size: 28px;
+    font-weight: 800;
+  }
+  .hero-foot {
+    margin-top: auto;
+    padding-top: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .hero-foot span {
+    padding: 7px 14px;
+    border-radius: 999px;
+    background: rgba(14, 18, 32, 0.3);
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .cell {
+    position: relative;
+    flex: none;
+    width: 172px;
+    height: 408px;
+    align-self: center;
+    overflow: visible;
+  }
+  .cell-glass {
+    fill: rgba(255, 255, 255, 0.16);
+    stroke: rgba(255, 255, 255, 0.5);
+    stroke-width: 2;
+  }
+  .cell-cap {
+    fill: rgba(255, 255, 255, 0.5);
+  }
+  .cell-level {
+    transition: transform 1s cubic-bezier(0.3, 0.9, 0.3, 1);
+  }
+  .cell-wave-back {
+    fill: rgba(255, 255, 255, 0.45);
+    animation: ov-wave 5s linear infinite reverse;
+  }
+  .cell-wave {
+    fill: #fff;
+    animation: ov-wave 3.4s linear infinite;
+  }
+  .cell-th-line {
+    stroke: #0e1220;
+    stroke-width: 2.5;
+    stroke-dasharray: 3 7;
+    stroke-linecap: round;
+  }
+  .cell-th-pill {
+    fill: #0e1220;
+  }
+  .cell-th-text {
+    fill: #fff;
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  /* 負載 */
+  .load {
+    grid-column: 6 / span 3;
+    grid-row: span 2;
+    align-items: center;
+  }
+  .load .label {
+    align-self: flex-start;
+  }
+  .gauge {
+    width: 100%;
+    max-width: 250px;
+    margin-top: 18px;
+  }
+  .gauge-track {
+    fill: none;
+    stroke: var(--sub);
+    stroke-width: 24;
+    stroke-linecap: round;
+  }
+  .gauge-value {
+    fill: none;
+    stroke: url(#g-accent);
+    stroke-width: 24;
+    stroke-linecap: round;
+    transition: stroke-dasharray 0.8s;
+  }
+  .load.warning .gauge-value,
+  .load.critical .gauge-value {
+    stroke: var(--lv);
+  }
+  .gauge text {
+    font-family: var(--font);
+    fill: var(--ink);
+  }
+  .g-num {
+    font-size: 62px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+  .g-unit {
+    font-size: 24px;
+    font-weight: 700;
+  }
+  .load-w {
+    margin-top: auto;
+    align-self: stretch;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 18px 20px;
+    border-radius: var(--r-m);
+    background: var(--sub);
+  }
+  .load-w .big {
+    font-size: 38px;
+  }
+
+  /* 市電 */
+  .mains {
+    grid-column: 9 / span 4;
+    min-height: 270px;
+  }
+  .mains-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 14px;
+  }
+  .mains .big {
+    font-size: 72px;
+  }
+  .hz {
+    font-size: 22px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .mains-wave {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 10px;
+    width: 100%;
+    height: 96px;
+  }
+  .mains-wave path {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 4;
+    stroke-linecap: round;
+    opacity: 0.85;
+  }
+  .mains.down {
+    background: var(--deep);
+    color: var(--on-deep);
+  }
+  .mains.down .big {
+    color: #ff7a80;
+    font-weight: 900;
+  }
+  .mains.down .mains-wave path {
+    stroke: #ff5b63;
+    stroke-dasharray: 2 10;
+  }
+
+  .mini {
+    min-height: 182px;
+  }
+  .mini.out {
+    grid-column: 9 / span 2;
+  }
+  .mini.out.wide {
+    grid-column: 9 / span 4;
+  }
+  .mini.temp {
+    grid-column: 11 / span 2;
+  }
+  .mini .big {
+    margin-top: auto;
+    font-size: 46px;
+  }
+
+  /* 節點 */
+  .count {
+    grid-column: 1 / span 3;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .count .big {
+    font-size: 104px;
+    letter-spacing: 0.02em;
+  }
+  .count .big em {
+    font-style: normal;
+    opacity: 0.4;
+  }
+  .count-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 16px;
+    border-top: 2px solid rgba(20, 26, 5, 0.14);
+    font-weight: 800;
+    font-size: 20px;
+    white-space: nowrap;
+  }
+  .pips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 5px;
+  }
+  .pips i {
+    width: 12px;
+    height: 12px;
+    border-radius: 4px;
+    background: var(--on-lime);
+  }
+  .pips i.off {
+    background: transparent;
+    box-shadow: inset 0 0 0 2px rgba(20, 26, 5, 0.4);
+  }
+  .nodes {
+    grid-column: 4 / span 9;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  .node {
+    padding: 24px;
+    gap: 16px;
+  }
+  .node-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .node-name {
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1.1;
+  }
+  .node-ip {
+    margin-top: 4px;
+    color: var(--ink-3);
+    font-weight: 600;
+    font-size: 15px;
+  }
+
+  /* 拓撲 */
+  .topo {
+    grid-column: 1 / span 7;
+    padding-bottom: 20px;
+  }
+  .topo .topo-graph {
+    margin-top: 14px;
+  }
+  .legend {
+    display: flex;
+    gap: 18px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--on-deep-2);
+  }
+  .legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .legend i {
+    width: 22px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--glow);
+  }
+  .legend i.data {
+    height: 2px;
+    background: var(--on-deep-2);
+  }
+
+  /* 關機條件 */
+  .conds {
+    grid-column: 8 / span 5;
+  }
+  .verdict {
+    margin-top: 10px;
+    font-size: 40px;
+    font-weight: 900;
+    line-height: 1.15;
+  }
+  .segs {
+    display: flex;
+    gap: 8px;
+    margin: 22px 0 6px;
+  }
+  .segs i {
+    flex: 1;
+    height: 14px;
+    border-radius: 7px;
+    background: currentColor;
+    opacity: 0.16;
+  }
+  .segs i.met {
+    background: var(--accent);
+    opacity: 1;
+  }
+  .cond-list {
+    list-style: none;
+    margin: auto 0 0;
+    padding: 0;
+  }
+  .cond-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 11px 0;
+    border-top: 1.5px solid color-mix(in srgb, currentColor 14%, transparent);
+    font-weight: 600;
+  }
+  .cond-list b {
+    font-weight: 800;
+    opacity: 0.45;
+  }
+  .cond-list li.met b {
+    opacity: 1;
+    color: var(--accent-ink);
+  }
+
+  /* 趨勢、流程、事件 */
+  .trend {
+    grid-column: 1 / span 5;
+  }
+  .trend .chart {
+    margin-top: 18px;
+  }
+  .keys i.load-key {
+    background: var(--ink-3);
+  }
+  .flow-tile {
+    grid-column: 6 / span 3;
+  }
+  .events {
+    grid-column: 9 / span 4;
+  }
+  .events .ev {
+    margin-top: 10px;
+  }
+  .events .ev li {
+    grid-template-columns: 4.8em 1fr;
+  }
+  .events .ev .who {
+    display: none;
+  }
+}
+
+@keyframes ov-wave {
+  to {
+    transform: translateX(-120px);
+  }
+}
+
+@media (max-width: 1100px) {
+  .v-overview {
+    .tile,
+    .nodes {
+      grid-column: 1 / -1;
+      grid-row: auto;
+      min-height: 0;
+    }
+    .mini.out:not(.wide),
+    .mini.temp {
+      grid-column: span 1;
+      min-height: 130px;
+    }
+    .hero {
+      min-height: 360px;
+      padding: 24px;
+    }
+    .hero-num {
+      font-size: 96px;
+    }
+    .hero-num small {
+      font-size: 40px;
+    }
+    .hero-run {
+      font-size: 22px;
+    }
+    .cell {
+      width: 118px;
+      height: 280px;
+    }
+    .mains {
+      min-height: 210px;
+    }
+    .mains .big {
+      font-size: 56px;
+    }
+    .count .big {
+      font-size: 92px;
+    }
+    .nodes {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+    }
+  }
+}

@@ -23,6 +23,10 @@ dev = [
     "httpx>=0.28.0",
     "pytest>=8.3.0",
 ]
+# 瀏覽器 E2E 測試（tests/e2e），需要另外下載 Chromium：uv run --group e2e playwright install chromium
+e2e = [
+    "playwright>=1.49.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
