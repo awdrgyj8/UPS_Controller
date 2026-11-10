@@ -39,6 +39,23 @@ def test_topology_node_details(page):
     expect(page.locator('[data-node^="server-"]')).to_have_count(0)
 
 
+LABELS_OUTSIDE_BOX = """() => [...document.querySelectorAll('.tg-node, .tg-pill')].flatMap((group) => {
+  const box = group.querySelector('rect').getBoundingClientRect()
+  return [...group.querySelectorAll('text')]
+    .filter((text) => text.getBoundingClientRect().right > box.right - 2)
+    .map((text) => text.textContent)
+})"""
+
+
+def test_topology_labels_stay_inside_their_boxes(page):
+    """SVG 文字不會自動截斷：方框裡的名稱要依實際寬度縮小或截斷，不能蓋到框外。"""
+    for url, graph in (("/#/overview", ".v-overview .topo-graph"), ("/#/topology", ".v-topology .topo-graph")):
+        page.goto(url)
+        expect(page.locator(f'{graph} [data-node="ups"]')).to_be_visible()
+        page.wait_for_function("document.fonts.status === 'loaded'")
+        assert page.evaluate(LABELS_OUTSIDE_BOX) == []
+
+
 def test_ups_page_variable_search(page):
     page.goto("/#/ups")
     variables = page.get_by_test_id("nut-variables")
