@@ -282,7 +282,7 @@ class DiagnosticsRunner:
         if variables is None:
             ctx.finish("warn", "NUT 無法連線：控制器會略過每一輪控制流程")
         else:
-            from Api.NutClient import build_ups_snapshot
+            from Api.nut_client import build_ups_snapshot
             snapshot = build_ups_snapshot(variables)
             expected = self.service.power_store.expected()
             action = decide(snapshot, expected, threshold)

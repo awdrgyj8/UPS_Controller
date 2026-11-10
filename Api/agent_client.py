@@ -7,7 +7,7 @@ import uuid
 import requests
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
-from Api.Logger import log
+from Api.event_log import log
 
 _AGENT_REQUEST_TIMEOUT = 5
 

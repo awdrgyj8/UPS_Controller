@@ -5,10 +5,10 @@ RealDrivers 把 Api/ 的各個客戶端組起來；SimDrivers（見 simulator.py
 """
 import requests
 
-from Api import WakeOnLan
-from Api.AgentAPI import AgentClient
-from Api.NutClient import NUT_ERRORS, NutClient
-from Api.PteroAPI import PteroClient
+from Api import wake_on_lan
+from Api.agent_client import AgentClient
+from Api.nut_client import NUT_ERRORS, NutClient
+from Api.ptero_client import PteroClient
 
 
 class DriverError(Exception):
@@ -89,7 +89,7 @@ class RealDrivers:
 
     # ---- Wake-on-LAN ----
     def wol(self, mac):
-        return WakeOnLan.send_wake_on_lan(mac)
+        return wake_on_lan.send_wake_on_lan(mac)
 
     def valid_mac(self, mac):
-        return WakeOnLan.is_valid_mac(mac)
+        return wake_on_lan.is_valid_mac(mac)

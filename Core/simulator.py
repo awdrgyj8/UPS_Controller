@@ -10,7 +10,7 @@ import threading
 import time
 import uuid
 
-from Api.WakeOnLan import is_valid_mac
+from Api.wake_on_lan import is_valid_mac
 from Core.drivers import DriverError
 
 # 故障注入選項

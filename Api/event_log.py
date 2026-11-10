@@ -3,12 +3,12 @@
 _hooks = []
 
 
-def addHook(hook):
+def add_hook(hook):
     if hook not in _hooks:
         _hooks.append(hook)
 
 
-def removeHook(hook):
+def remove_hook(hook):
     if hook in _hooks:
         _hooks.remove(hook)
 

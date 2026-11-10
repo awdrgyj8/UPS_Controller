@@ -2,7 +2,7 @@
 import requests
 import urllib3
 
-from Api.Logger import log
+from Api.event_log import log
 
 # 面板常用自簽憑證，請求一律不驗證憑證；關掉 urllib3 對此的警告
 urllib3.disable_warnings()

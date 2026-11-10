@@ -7,10 +7,10 @@ import requests
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
-from Api.AgentAPI import AgentClient
-from Api.NutClient import NutClient, build_ups_snapshot, error_snapshot
-from Api.PteroAPI import PteroClient
-from Api.WakeOnLan import is_valid_mac
+from Api.agent_client import AgentClient
+from Api.nut_client import NutClient, build_ups_snapshot, error_snapshot
+from Api.ptero_client import PteroClient
+from Api.wake_on_lan import is_valid_mac
 from Core.config import Settings
 from Core.drivers import DriverError, RealDrivers
 

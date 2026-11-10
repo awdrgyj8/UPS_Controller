@@ -11,8 +11,8 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from Api import Logger
-from Api.NutClient import build_ups_snapshot, error_snapshot
+from Api import event_log
+from Api.nut_client import build_ups_snapshot, error_snapshot
 from Core.drivers import DriverError
 from Core.state import PHASE_LABELS, describe_status_flags
 
@@ -141,7 +141,7 @@ class ControllerService:
         self._on_battery_since = None
         self._nut_connected = None
         self._ptero_ok = None
-        Logger.addHook(self._on_log)
+        event_log.add_hook(self._on_log)
 
         state.update("nut", **drivers.nut_target())
         state.update("ptero", url=drivers.ptero_url(), configured=drivers.ptero_configured())
@@ -155,7 +155,7 @@ class ControllerService:
         self.state.add_event(level, source, message)
 
     def log(self, message, level=None, source="controller"):
-        Logger.log(message, level=level, source=source)
+        event_log.log(message, level=level, source=source)
 
     def _set_phase(self, phase, decision):
         self.state.update("controller", phase=phase, phase_label=PHASE_LABELS[phase], decision=decision)
@@ -178,7 +178,7 @@ class ControllerService:
     def stop(self):
         self._stop.set()
         self._wake.set()
-        Logger.removeHook(self._on_log)
+        event_log.remove_hook(self._on_log)
 
     def trigger_poll(self):
         self._wake.set()

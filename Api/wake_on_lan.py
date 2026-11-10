@@ -3,7 +3,7 @@ import re
 
 from wakeonlan import send_magic_packet
 
-from Api.Logger import log
+from Api.event_log import log
 
 _MAC_PATTERN = re.compile(r"^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$|^[0-9A-Fa-f]{12}$")
 

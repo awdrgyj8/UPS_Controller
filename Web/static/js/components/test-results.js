@@ -24,7 +24,7 @@ export default {
       <section v-for="group in groups" :key="group.name">
         <h3>{{ group.name }}</h3>
         <ul>
-          <li v-for="item in group.items" :key="item.id" :class="statusOf(item).level" :data-test-id="item.id">
+          <li v-for="item in group.items" :key="item.id" :class="statusOf(item).level" :data-check="item.id">
             <Icon v-if="item.status === 'running'" name="loader" :size="14" :stroke="3" class="lead" />
             <span v-else class="dot lead"></span>
             <span class="name">{{ item.label }}<span v-if="item.dry_run" class="dry">乾跑</span></span>

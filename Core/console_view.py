@@ -1,4 +1,4 @@
-"""終端機狀態表（原本 main.py 的 showStatus）。"""
+"""終端機狀態表。"""
 import datetime
 
 from rich.console import Console
@@ -20,34 +20,34 @@ def _format_uptime(uptime_seconds):
     return f"{seconds}s"
 
 
-def show_status(upsSnapshot, expectedPowerState, statuses):
-    upsTable = Table(
+def show_status(ups_snapshot, expected_power_state, statuses):
+    ups_table = Table(
         title=f"UPS / NUT 狀態 - {datetime.datetime.now().strftime('%H:%M:%S')}",
         show_header=True,
         header_style="bold cyan",
     )
-    upsTable.add_column("NUT 連線")
-    upsTable.add_column("UPS 狀態")
-    upsTable.add_column("市電")
-    upsTable.add_column("電量")
-    upsTable.add_column("訊息")
+    ups_table.add_column("NUT 連線")
+    ups_table.add_column("UPS 狀態")
+    ups_table.add_column("市電")
+    ups_table.add_column("電量")
+    ups_table.add_column("訊息")
 
-    nutConnection = "[green]Connected[/green]" if upsSnapshot["ok"] is True else "[red]Disconnected[/red]"
-    if upsSnapshot["power"] is True:
-        powerLabel = "[green]Online[/green]"
-    elif upsSnapshot["power"] is False:
-        powerLabel = "[red]On Battery[/red]"
+    nut_connection = "[green]Connected[/green]" if ups_snapshot["ok"] is True else "[red]Disconnected[/red]"
+    if ups_snapshot["power"] is True:
+        power_label = "[green]Online[/green]"
+    elif ups_snapshot["power"] is False:
+        power_label = "[red]On Battery[/red]"
     else:
-        powerLabel = "[yellow]Unknown[/yellow]"
-    batteryLabel = "-" if upsSnapshot["battery"] is None else f"{upsSnapshot['battery']}%"
-    upsTable.add_row(
-        nutConnection,
-        upsSnapshot["status"],
-        powerLabel,
-        batteryLabel,
-        upsSnapshot["error"] or "OK",
+        power_label = "[yellow]Unknown[/yellow]"
+    battery_label = "-" if ups_snapshot["battery"] is None else f"{ups_snapshot['battery']}%"
+    ups_table.add_row(
+        nut_connection,
+        ups_snapshot["status"],
+        power_label,
+        battery_label,
+        ups_snapshot["error"] or "OK",
     )
-    console.print(upsTable)
+    console.print(ups_table)
 
     table = Table(
         title=f"Agent 狀態 - {datetime.datetime.now().strftime('%H:%M:%S')}",
@@ -65,10 +65,10 @@ def show_status(upsSnapshot, expectedPowerState, statuses):
     table.add_column("延遲")
     table.add_column("訊息")
 
-    expectedLabel = "開機" if expectedPowerState is True else "關機"
+    expected_label = "開機" if expected_power_state is True else "關機"
     for status in statuses:
         online = status["online"] is True
-        connectionLabel = "[green]Online[/green]" if online else "[red]Offline[/red]"
+        connection_label = "[green]Online[/green]" if online else "[red]Offline[/red]"
         latency = "-" if status["latency_ms"] is None else f"{status['latency_ms']} ms"
         message = "OK" if online else status["error"]
         table.add_row(
@@ -76,8 +76,8 @@ def show_status(upsSnapshot, expectedPowerState, statuses):
             status["ip"],
             status["port"],
             status["mac"],
-            expectedLabel,
-            connectionLabel,
+            expected_label,
+            connection_label,
             status["hostname"] or "-",
             _format_uptime(status["uptime_seconds"]),
             latency,
@@ -85,6 +85,6 @@ def show_status(upsSnapshot, expectedPowerState, statuses):
         )
 
     if len(statuses) == 0:
-        table.add_row("-", "-", "-", "-", expectedLabel, "[yellow]Unknown[/yellow]", "-", "-", "-", "AgentInfo 未設定或沒有 Agent")
+        table.add_row("-", "-", "-", "-", expected_label, "[yellow]Unknown[/yellow]", "-", "-", "-", "AgentInfo 未設定或沒有 Agent")
 
     console.print(table)

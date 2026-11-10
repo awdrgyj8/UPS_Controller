@@ -51,17 +51,17 @@ def test_ups_page_variable_search(page):
 def test_selftest_passes(page):
     page.goto("/#/tests?tab=selftest")
     page.get_by_test_id("run-selftest").click()
-    expect(page.locator('[data-test-id="logic.consistency"]')).to_be_visible(timeout=30_000)
+    expect(page.locator('[data-check="logic.consistency"]')).to_be_visible(timeout=30_000)
     expect(page.locator(".results li.critical")).to_have_count(0)
-    expect(page.locator('[data-test-id="agent.1.verify"]')).to_contain_text("通過")
+    expect(page.locator('[data-check="agent.1.verify"]')).to_contain_text("通過")
 
 
 def test_selftest_reports_injected_fault(page):
     page.request.post("/api/sim/agents/1/fault", data={"fault": "reject"})
     page.goto("/#/tests?tab=selftest")
     page.get_by_test_id("run-selftest").click()
-    expect(page.locator('[data-test-id="agent.1.verify"]')).to_contain_text("invalid signature", timeout=30_000)
-    expect(page.locator('[data-test-id="agent.2.verify"]')).to_contain_text("通過")
+    expect(page.locator('[data-check="agent.1.verify"]')).to_contain_text("invalid signature", timeout=30_000)
+    expect(page.locator('[data-check="agent.2.verify"]')).to_contain_text("通過")
 
 
 def test_simulator_outage_updates_whole_ui(page):
