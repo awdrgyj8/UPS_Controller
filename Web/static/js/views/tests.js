@@ -3,6 +3,7 @@ import TestResults from '../components/test-results.js'
 import { TEST_STATUS, act, cleanMessage, store } from '../store.js'
 import { api } from '../api.js'
 import { duration } from '../format.js'
+import { sinePath } from '../shapes.js'
 
 const TABS = [
   { id: 'selftest', label: '系統自檢' },
@@ -83,12 +84,7 @@ const POWER = { on: '開機', off: '關機', booting: '開機中', shutting_down
 const SPEEDS = [1, 5, 10, 20, 50, 100]
 
 // 市電波形：供電時是正弦波，切斷後是平線
-function sinePath(flat) {
-  let d = ''
-  for (let x = -4; x <= 444; x += 4) d += `${d ? 'L' : 'M'}${x} ${(40 + (flat ? 0 : Math.sin((x / 440) * Math.PI * 8) * 22)).toFixed(1)}`
-  return d
-}
-const WAVE = { live: sinePath(false), flat: sinePath(true) }
+const WAVE = { live: sinePath(false, 40, 22), flat: sinePath(true, 40, 22) }
 
 export default {
   name: 'TestsView',

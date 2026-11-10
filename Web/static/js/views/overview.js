@@ -2,18 +2,13 @@ import { computed } from 'vue'
 import TopologyGraph from '../components/topology-graph.js'
 import { agentLevel, isServerRunning, serverStatus, store } from '../store.js'
 import { clock, duration, num } from '../format.js'
+import { sinePath } from '../shapes.js'
 
 // 電池液面的波形：週期 120，畫得比電池寬，靠位移做出流動
 function wavePath(amp, phase) {
   let d = `M${-240 + phase} 0`
   for (let x = -240 + phase; x < 420; x += 120) d += `q30 ${-amp} 60 0t60 0`
   return d + 'V420H-240Z'
-}
-// 市電的正弦波；停電時畫成一條平線
-function sinePath(flat) {
-  let d = ''
-  for (let x = -4; x <= 444; x += 4) d += `${d ? 'L' : 'M'}${x} ${(46 + (flat ? 0 : Math.sin((x / 440) * Math.PI * 8) * 24)).toFixed(1)}`
-  return d
 }
 const CELL = { top: 30, bottom: 396 } // 電池內部可填滿的範圍（SVG 座標）
 const GAUGE_ARC = 405.3 // 負載弧（270 度）的長度

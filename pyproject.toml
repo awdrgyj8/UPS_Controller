@@ -1,19 +1,17 @@
 [project]
-name = "controller"
+name = "ups-controller"
 version = "0.1.0"
-description = "Add your description here"
+description = "監控 NUT UPS，停電時依序關閉 Pterodactyl 伺服器與節點，復電後以 Wake-on-LAN 喚醒"
 readme = "README.md"
-requires-python = ">=3.12"
+# nut2 依賴標準庫的 telnetlib，Python 3.13 已移除該模組
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "cryptography>=46.0.1",
-    "dotenv>=0.9.9",
     "fastapi>=0.115.0",
-    "logging>=0.4.9.6",
     "nut2>=2.1.1",
+    "pydantic-settings>=2.6.0",
     "requests>=2.32.5",
     "rich>=13.9.4",
-    "typing>=3.10.0.0",
-    "uv2>=1.88.1133",
     "uvicorn>=0.32.0",
     "wakeonlan>=3.1.0",
 ]
@@ -22,6 +20,7 @@ dependencies = [
 dev = [
     "httpx>=0.28.0",
     "pytest>=8.3.0",
+    "ruff>=0.8.0",
 ]
 # 瀏覽器 E2E 測試（tests/e2e），需要另外下載 Chromium：uv run --group e2e playwright install chromium
 e2e = [
@@ -30,3 +29,13 @@ e2e = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+# E/F：語法與未使用的名稱；I：import 排序；UP：過時寫法；B：常見錯誤
+select = ["E", "F", "I", "UP", "B"]
+# 行寬只當作參考，不為了斷行去改既有的長字串
+ignore = ["E501"]

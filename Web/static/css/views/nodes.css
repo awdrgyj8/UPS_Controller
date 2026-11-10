@@ -281,11 +281,6 @@
     .empty {
       color: var(--on-deep-2);
     }
-    /* 深色底上的籤：用狀態色調出底色與字色，不依賴淺色主題的粉底 */
-    .pill {
-      background: color-mix(in srgb, var(--lv, var(--mute)) 22%, transparent);
-      color: color-mix(in srgb, var(--lv, var(--mute)) 55%, var(--on-deep));
-    }
     .btn:not(.danger) {
       background: var(--deep-chip);
       color: var(--on-deep);

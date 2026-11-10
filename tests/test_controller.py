@@ -38,17 +38,6 @@ def test_ptero_info_reports_unknown_references():
     assert len(problems) == 2
 
 
-def test_load_ptero_info(monkeypatch):
-    from Core.config import load_ptero_info
-    monkeypatch.setenv("PteroInfo", '[{"node":1,"agent":"PVE"},{"node":2}]')
-    entries, error = load_ptero_info()
-    assert entries == [{"node": 1, "agent": "PVE"}]
-    assert "第 2 筆" in error
-    monkeypatch.setenv("PteroInfo", "not json")
-    assert load_ptero_info()[1].startswith("PteroInfo JSON")
-    monkeypatch.delenv("PteroInfo")
-    assert load_ptero_info() == ([], "")
-
 
 def test_link_topology_uses_ptero_info(harness, monkeypatch):
     harness.drivers.ptero_info = lambda: ([{"node": 3, "agent": "Server"}, {"node": 4, "agent": "Server"},

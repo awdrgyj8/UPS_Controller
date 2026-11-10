@@ -247,7 +247,7 @@ class DiagnosticsRunner:
                 ctx.finish("skip", "缺少 battery.charge / battery.runtime")
 
         # ---- Pterodactyl ----
-        servers = self._check_ptero()
+        self._check_ptero()
 
         # ---- Agents ----
         for index, agent in enumerate(agents, start=1):
@@ -282,8 +282,8 @@ class DiagnosticsRunner:
         if variables is None:
             ctx.finish("warn", "NUT 無法連線：控制器會略過每一輪控制流程")
         else:
-            from Api.NutClient import buildUpsSnapshot
-            snapshot = buildUpsSnapshot(variables)
+            from Api.NutClient import build_ups_snapshot
+            snapshot = build_ups_snapshot(variables)
             expected = self.service.power_store.expected()
             action = decide(snapshot, expected, threshold)
             labels = {

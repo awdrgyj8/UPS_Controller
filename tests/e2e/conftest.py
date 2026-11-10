@@ -5,6 +5,7 @@
     uv run --group e2e pytest tests/e2e
 沒有安裝時這些測試會自動略過。已經有現成的 Chromium 可以用 PW_CHROMIUM_PATH 指定路徑。
 """
+import json
 import os
 import socket
 import subprocess
@@ -18,6 +19,9 @@ import pytest
 sync_api = pytest.importorskip("playwright.sync_api", reason="未安裝 playwright，略過瀏覽器測試")
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT))
+
+from Core.simulator import _DEFAULT_AGENTS  # noqa: E402
 
 
 def _free_port():
@@ -30,8 +34,8 @@ def _free_port():
 def base_url():
     port = int(os.environ.get("E2E_PORT") or _free_port())
     url = f"http://127.0.0.1:{port}"
-    env = dict(os.environ, CONSOLE_TABLE="false")
-    env.pop("AgentInfo", None)  # 一律使用內建的模擬節點
+    # 明確指定模擬節點，蓋過開發機 .env 裡的 AgentInfo，測試才能依賴 Node-1 到 Node-3
+    env = dict(os.environ, CONSOLE_TABLE="false", AgentInfo=json.dumps(_DEFAULT_AGENTS))
     process = subprocess.Popen(
         [sys.executable, "main.py", "--simulate", "--port", str(port)],
         cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT,
@@ -44,7 +48,7 @@ def base_url():
                 break
             except OSError:
                 if process.poll() is not None or time.time() > deadline:
-                    raise RuntimeError("Controller 沒有成功啟動")
+                    raise RuntimeError("Controller 沒有成功啟動") from None
                 time.sleep(0.3)
         yield url
     finally:

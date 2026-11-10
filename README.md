@@ -61,7 +61,8 @@ PteroInfo=[{"node":3,"agent":"Server-A"},{"node":4,"agent":"Server-A"},{"node":1
 ## 自動化測試
 
 ```bash
-uv run pytest                                        # 控制流程、自檢、Web API（以模擬環境執行）
+uv run pytest                                        # 控制流程、自檢、設定、Api 客戶端、Web API（不連線任何真實設備）
+uv run ruff check .                                  # lint
 uv run --group e2e playwright install chromium       # 第一次跑瀏覽器測試前下載 Chromium
 uv run --group e2e pytest tests/e2e                  # 瀏覽器 E2E 測試（沒裝 playwright 時自動略過）
 ```
@@ -70,15 +71,17 @@ uv run --group e2e pytest tests/e2e                  # 瀏覽器 E2E 測試（�
 
 ```
 main.py              進入點（--simulate / --no-web / --host / --port）
-Core/config.py       環境變數設定
-Core/controller.py   控制迴圈（原 main.py 邏輯）、UPS/Agent/面板監控
-Core/drivers.py      實機驅動：包裝 Api/ 模組
-Core/simulator.py    模擬環境與模擬驅動
+Core/config.py       設定：唯一讀取環境變數與 .env 的地方（pydantic-settings）
+Core/controller.py   控制迴圈、UPS/Agent/面板監控
+Core/drivers.py      實機驅動：把 Api/ 的客戶端組起來
+Core/simulator.py    模擬環境與模擬驅動（介面與實機驅動相同）
 Core/diagnostics.py  系統自檢、停電演練
 Core/scenarios.py    情境測試
 Core/state.py        執行期共享狀態、事件、歷史資料
+Api/                 對外連線的客戶端：NUT、Pterodactyl、UPS_Agent、Wake-on-LAN（設定由呼叫端傳入）
 Web/server.py        FastAPI：REST API、SSE 即時串流（/api/stream）、直接送出 Web/static
 Web/static/          前端（Vue 3，瀏覽器原生 ES modules，不需要編譯）
+Data/powerState.json 節點預期的電源狀態（執行期產生，不進版控）
 ```
 
 API 文件：啟動後開啟 `/api/docs`。

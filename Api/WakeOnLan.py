@@ -1,36 +1,21 @@
-import os, json, re
+"""Wake-on-LAN：送出 magic packet 喚醒節點。"""
+import re
+
 from wakeonlan import send_magic_packet
+
 from Api.Logger import log
 
 _MAC_PATTERN = re.compile(r"^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$|^[0-9A-Fa-f]{12}$")
 
-def isValidMac(mac):
+
+def is_valid_mac(mac):
     return isinstance(mac, str) and _MAC_PATTERN.match(mac.strip()) is not None
 
-def sendWakeOnLanTo(mac):
+
+def send_wake_on_lan(mac):
     try:
         send_magic_packet(mac)
         return True
-    except Exception as e:
+    except Exception as e:  # 喚醒流程不能因為單一封包失敗而中斷
         log(f"❌ 發送 Wake-on-LAN 到 {mac} 發生錯誤: {e}", source="wol")
         return False
-
-def sendWakeOnLan():
-    agentInfo = os.getenv("AgentInfo")
-    if agentInfo is None:
-        log("❌ AgentInfo 環境變數未設定", source="wol")
-        return False
-    try:
-        agent_ips = json.loads(agentInfo)
-    except json.JSONDecodeError as e:
-        log(f"❌ AgentInfo JSON 格式錯誤: {e}", source="wol")
-        return False
-
-    sentPacket = False
-    for agent in agent_ips:
-        if "mac" not in agent:
-            log(f"❌ AgentInfo 缺少 mac 欄位: {agent}", source="wol")
-            continue
-        if sendWakeOnLanTo(agent['mac']):
-            sentPacket = True
-    return sentPacket

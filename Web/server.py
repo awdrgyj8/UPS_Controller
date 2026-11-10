@@ -131,7 +131,7 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
         try:
             return service.agent_action(index, action)
         except KeyError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail=str(e)) from e
 
     # ---- 測試中心 ----
     @app.post("/api/diagnostics/{kind}", dependencies=auth)
@@ -139,7 +139,7 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
         try:
             started = diagnostics.start(kind)
         except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail=str(e)) from e
         if not started:
             raise HTTPException(status_code=409, detail="已有測試正在執行")
         return {"ok": True}
@@ -159,7 +159,7 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
         try:
             started = scenarios.start(name)
         except KeyError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail=str(e)) from e
         if not started:
             raise HTTPException(status_code=409, detail="已有情境測試正在執行")
         return {"ok": True}
@@ -201,7 +201,7 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
         try:
             simulator.set_agent_fault(index, body.fault)
         except (KeyError, ValueError) as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise HTTPException(status_code=400, detail=str(e)) from e
         return {"ok": True}
 
     @app.post("/api/sim/agents/{index}/power", dependencies=auth)
@@ -210,7 +210,7 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
         try:
             simulator.set_agent_power(index, body.power)
         except KeyError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail=str(e)) from e
         return {"ok": True}
 
     @app.post("/api/sim/servers/{identifier}/stuck", dependencies=auth)
@@ -219,7 +219,7 @@ def create_app(service, diagnostics, simulator=None, scenarios=None):
         try:
             simulator.set_server_stuck(identifier, body.value)
         except KeyError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            raise HTTPException(status_code=404, detail=str(e)) from e
         return {"ok": True}
 
     @app.post("/api/sim/reset", dependencies=auth)

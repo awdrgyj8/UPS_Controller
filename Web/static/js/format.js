@@ -1,4 +1,4 @@
-export function pad(n) {
+function pad(n) {
   return String(n).padStart(2, '0')
 }
 
@@ -7,12 +7,6 @@ export function clock(ts, withSeconds = true) {
   const d = new Date(ts * 1000)
   const base = `${pad(d.getHours())}:${pad(d.getMinutes())}`
   return withSeconds ? `${base}:${pad(d.getSeconds())}` : base
-}
-
-export function dateTime(ts) {
-  if (!ts) return '-'
-  const d = new Date(ts * 1000)
-  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${clock(ts)}`
 }
 
 export function duration(seconds, short = false) {

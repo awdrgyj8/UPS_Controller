@@ -89,7 +89,7 @@ setInterval(() => {
 }, 1000)
 
 // 目前由誰供電：決定整個介面的強調色（見 css/tokens.css 的 data-power）
-export function powerSource(state) {
+function powerSource(state) {
   const ups = state?.ups
   if (!ups || ups.ok !== true) return 'unknown'
   return ups.power ? 'mains' : 'battery'
@@ -116,7 +116,7 @@ export function agentLevel(agent, expected) {
   return { level: 'critical', label: '離線' }
 }
 
-export const SERVER_STATES = {
+const SERVER_STATES = {
   running: { level: 'good', label: '運行中' },
   starting: { level: 'warning', label: '啟動中' },
   stopping: { level: 'warning', label: '關閉中' },
@@ -124,13 +124,13 @@ export const SERVER_STATES = {
   unknown: { level: 'critical', label: '未知' },
 }
 
-export function serverLevel(state) {
+function serverLevel(state) {
   return SERVER_STATES[state] || SERVER_STATES.unknown
 }
 
 // 面板回報 starting 但已運行超過 1 小時，視為運行中
 // （常見於面板偵測不到「啟動完成」訊息的程式，例如 Discord Bot）。只影響顯示，不影響關機流程。
-export const STARTING_AS_RUNNING_MS = 60 * 60 * 1000
+const STARTING_AS_RUNNING_MS = 60 * 60 * 1000
 
 export function serverStatus(server) {
   if (server.state === 'starting' && (server.uptime_ms || 0) >= STARTING_AS_RUNNING_MS) {

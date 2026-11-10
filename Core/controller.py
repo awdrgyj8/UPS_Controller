@@ -12,7 +12,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from Api import Logger
-from Api.NutClient import buildUpsSnapshot, errorSnapshot
+from Api.NutClient import build_ups_snapshot, error_snapshot
 from Core.drivers import DriverError
 from Core.state import PHASE_LABELS, describe_status_flags
 
@@ -87,25 +87,33 @@ class PowerStateStore:
         self._lock = threading.Lock()
 
     def read(self):
+        """檔案還不存在（第一次執行）時視為節點開機中。"""
         with self._lock:
             if self.path is None:
                 return dict(self._memory)
-            with open(self.path, "r") as f:
-                return json.load(f)
+            try:
+                with open(self.path) as f:
+                    return json.load(f)
+            except FileNotFoundError:
+                return dict(self._memory)
 
     def write(self, data):
         with self._lock:
             if self.path is None:
                 self._memory = dict(data)
                 return
+            os.makedirs(os.path.dirname(self.path), exist_ok=True)
             with open(self.path, "w") as f:
                 json.dump(data, f, indent=4)
 
     def writable(self):
-        """只檢查權限，不實際寫入（供自檢使用）。"""
+        """只檢查權限，不實際寫入（供自檢使用）。檔案還不存在時看能不能在資料夾裡建立。"""
         if self.path is None:
             return True
-        return os.access(self.path, os.W_OK) and os.access(os.path.dirname(self.path), os.W_OK)
+        folder = os.path.dirname(self.path)
+        if not os.path.exists(self.path):
+            return os.access(folder if os.path.isdir(folder) else os.path.dirname(folder), os.W_OK)
+        return os.access(self.path, os.W_OK) and os.access(folder, os.W_OK)
 
     def expected(self):
         return self.read()["AgentPowerState"]
@@ -215,9 +223,9 @@ class ControllerService:
         try:
             variables = self.drivers.ups_variables()
             latency = round((time.monotonic() - started) * 1000)
-            snapshot = buildUpsSnapshot(variables)
+            snapshot = build_ups_snapshot(variables)
         except (DriverError, ValueError) as e:
-            snapshot = errorSnapshot(e)
+            snapshot = error_snapshot(e)
             self.state.update("ups", ok=False, power=None, battery=None, status="UNKNOWN", status_flags=[],
                               error=str(e), updated_at=now)
             self.state.update("nut", connected=False, error=str(e), latency_ms=None, last_update=now)
@@ -272,7 +280,7 @@ class ControllerService:
                     enumerate(configs, start=1),
                 ))
         previous = {agent["index"]: agent for agent in self.state.get("agents")}
-        for index, (config, status) in enumerate(zip(configs, statuses), start=1):
+        for index, status in enumerate(statuses, start=1):
             old = previous.get(index)
             status["index"] = index
             status["checked_at"] = now

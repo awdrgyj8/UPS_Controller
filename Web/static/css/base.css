@@ -264,6 +264,11 @@ p {
   padding: 8px 16px;
   font-size: 16px;
 }
+/* 深色磚上的籤：用狀態色調出底色與字色，不依賴淺色主題的粉底 */
+.tile.deep .pill {
+  background: color-mix(in srgb, var(--lv, var(--mute)) 22%, transparent);
+  color: color-mix(in srgb, var(--lv, var(--mute)) 55%, var(--on-deep));
+}
 
 /* ---------- 磚 ---------- */
 .grid {

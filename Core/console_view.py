@@ -1,5 +1,6 @@
 """終端機狀態表（原本 main.py 的 showStatus）。"""
 import datetime
+
 from rich.console import Console
 from rich.table import Table
 
@@ -31,7 +32,7 @@ def show_status(upsSnapshot, expectedPowerState, statuses):
     upsTable.add_column("電量")
     upsTable.add_column("訊息")
 
-    nutConnection = "[green]Connected[/green]" if upsSnapshot["ok"] == True else "[red]Disconnected[/red]"
+    nutConnection = "[green]Connected[/green]" if upsSnapshot["ok"] is True else "[red]Disconnected[/red]"
     if upsSnapshot["power"] is True:
         powerLabel = "[green]Online[/green]"
     elif upsSnapshot["power"] is False:
@@ -64,9 +65,9 @@ def show_status(upsSnapshot, expectedPowerState, statuses):
     table.add_column("延遲")
     table.add_column("訊息")
 
-    expectedLabel = "開機" if expectedPowerState == True else "關機"
+    expectedLabel = "開機" if expectedPowerState is True else "關機"
     for status in statuses:
-        online = status["online"] == True
+        online = status["online"] is True
         connectionLabel = "[green]Online[/green]" if online else "[red]Offline[/red]"
         latency = "-" if status["latency_ms"] is None else f"{status['latency_ms']} ms"
         message = "OK" if online else status["error"]

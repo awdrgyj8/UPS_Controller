@@ -1,64 +1,41 @@
-import os, time
-from pathlib import Path
-from dotenv import load_dotenv
+"""NUT（Network UPS Tools）：讀取 UPS 的全部變數，並整理成控制流程使用的快照。"""
 from nut2 import PyNUTClient, PyNUTError  # type: ignore
-from Api.Logger import log
-
-BASE_DIR = Path(__file__).resolve().parents[1]
-load_dotenv(BASE_DIR / ".env")
 
 _REQUEST_TIMEOUT = 5
 NUT_ERRORS = (PyNUTError, OSError, ValueError, AttributeError)
 
-def _get_required_env(name):
-    value = os.getenv(name)
-    if value is None or value == "":
-        raise ValueError(f"{name} 環境變數未設定")
-    return value
 
-def _get_optional_env(name):
-    value = os.getenv(name)
-    if value is None or value == "":
-        return None
-    return value
+class NutClient:
+    def __init__(self, host, port, ups_name, login=None, password=None):
+        self.host = host
+        self.port = port
+        self.ups_name = ups_name
+        self.login = login or None
+        self.password = password or None
 
-def _get_nut_config():
-    return {
-        "host": _get_required_env("NUT_ServerIP"),
-        "port": int(_get_required_env("NUT_ServerPort")),
-        "ups_name": _get_required_env("NUT_UPS_NAME"),
-        "login": _get_optional_env("NUT_Login"),
-        "password": _get_optional_env("NUT_Password"),
-    }
+    def target(self):
+        """連線目標（不含密碼），供介面顯示。"""
+        return {
+            "host": self.host or "",
+            "port": str(self.port) if self.port is not None else "",
+            "ups_name": self.ups_name or "",
+            "auth": bool(self.login),
+        }
 
-def getNutTarget():
-    """回傳 NUT 連線目標（不含密碼），供介面顯示。"""
-    return {
-        "host": os.getenv("NUT_ServerIP") or "",
-        "port": os.getenv("NUT_ServerPort") or "",
-        "ups_name": os.getenv("NUT_UPS_NAME") or "",
-        "auth": bool(_get_optional_env("NUT_Login")),
-    }
+    def variables(self):
+        """讀取 UPS 全部 NUT 變數，失敗時拋出 NUT_ERRORS。"""
+        for name, value in (("NUT_ServerIP", self.host), ("NUT_ServerPort", self.port), ("NUT_UPS_NAME", self.ups_name)):
+            if value in (None, ""):
+                raise ValueError(f"{name} 環境變數未設定")
+        client = PyNUTClient(self.host, port=self.port, login=self.login, password=self.password,
+                             timeout=_REQUEST_TIMEOUT)
+        try:
+            return dict(client.list_vars(self.ups_name))
+        finally:
+            handler = getattr(client, "_srv_handler", None)
+            if handler is not None:
+                handler.close()
 
-def _list_ups_vars():
-    config = _get_nut_config()
-    client = PyNUTClient(
-        config["host"],
-        port=config["port"],
-        login=config["login"],
-        password=config["password"],
-        timeout=_REQUEST_TIMEOUT,
-    )
-    try:
-        return client.list_vars(config["ups_name"])
-    finally:
-        handler = getattr(client, "_srv_handler", None)
-        if handler is not None:
-            handler.close()
-
-def getUpsVariables():
-    """讀取 UPS 全部 NUT 變數，失敗時拋出 NUT_ERRORS。"""
-    return dict(_list_ups_vars())
 
 def _to_float(value):
     try:
@@ -66,27 +43,28 @@ def _to_float(value):
     except (TypeError, ValueError):
         return None
 
-def buildUpsSnapshot(vars):
-    """由 NUT 變數組出控制流程使用的快照（判斷邏輯與原本相同）。"""
-    ups_status = vars.get("ups.status", "UNKNOWN")
-    status_tokens = ups_status.split()
-    battery_charge = vars.get("battery.charge")
+
+def build_ups_snapshot(variables):
+    """由 NUT 變數組出控制流程使用的快照。ups.status 含 OB 代表改由電池供電。"""
+    ups_status = variables.get("ups.status", "UNKNOWN")
+    battery_charge = variables.get("battery.charge")
     return {
         "ok": True,
-        "power": "OB" not in status_tokens,
+        "power": "OB" not in ups_status.split(),
         "status": ups_status,
         "battery": int(float(battery_charge)) if battery_charge is not None else None,
         "error": "",
-        "runtime": _to_float(vars.get("battery.runtime")),
-        "load": _to_float(vars.get("ups.load")),
-        "input_voltage": _to_float(vars.get("input.voltage")),
-        "output_voltage": _to_float(vars.get("output.voltage")),
-        "input_frequency": _to_float(vars.get("input.frequency")),
-        "battery_voltage": _to_float(vars.get("battery.voltage")),
-        "temperature": _to_float(vars.get("ups.temperature")),
+        "runtime": _to_float(variables.get("battery.runtime")),
+        "load": _to_float(variables.get("ups.load")),
+        "input_voltage": _to_float(variables.get("input.voltage")),
+        "output_voltage": _to_float(variables.get("output.voltage")),
+        "input_frequency": _to_float(variables.get("input.frequency")),
+        "battery_voltage": _to_float(variables.get("battery.voltage")),
+        "temperature": _to_float(variables.get("ups.temperature")),
     }
 
-def errorSnapshot(error):
+
+def error_snapshot(error):
     return {
         "ok": False,
         "power": None,
@@ -94,21 +72,3 @@ def errorSnapshot(error):
         "battery": None,
         "error": str(error),
     }
-
-def getUpsSnapshot():
-    try:
-        return buildUpsSnapshot(getUpsVariables())
-    except NUT_ERRORS as e:
-        log(f"❌ 讀取 UPS 狀態失敗: {e}", source="nut")
-        return errorSnapshot(e)
-
-
-def getUpsPower():
-    return getUpsSnapshot()["power"]
-
-
-def getUpsBetteryPercentage():
-    return getUpsSnapshot()["battery"]
-
-def getUpsBatteryPercentage():
-    return getUpsBetteryPercentage()
