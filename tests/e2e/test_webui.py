@@ -131,3 +131,59 @@ def test_theme_toggle_persists(page):
     expect(html).to_have_attribute("data-theme", after)
     page.reload()
     expect(html).to_have_attribute("data-theme", after)
+
+
+PHONE = {"width": 402, "height": 874}
+PHONE_PAGES = ["overview", "topology", "ups", "nodes", "logs",
+               "tests?tab=selftest", "tests?tab=drill", "tests?tab=scenarios", "tests?tab=simulator"]
+# 每個 .grid 實際排出幾欄，以及整頁有沒有被撐出橫向捲軸
+LAYOUT = """() => ({
+  columns: [...document.querySelectorAll('.grid')].map((grid) => getComputedStyle(grid).gridTemplateColumns.split(' ').length),
+  overflow: document.scrollingElement.scrollWidth - innerWidth,
+})"""
+
+
+def test_phone_layout_is_single_column_on_every_page(page):
+    """窄螢幕下每一頁的磚都要佔滿整列：不能出現桌面版的 12 欄，也不能撐出橫向捲軸。"""
+    page.set_viewport_size(PHONE)
+    for name in PHONE_PAGES:
+        page.goto(f"/#/{name}")
+        expect(page.locator(f".v-{name.split('?')[0]}")).to_be_visible()
+        layout = page.evaluate(LAYOUT)
+        assert max(layout["columns"], default=0) <= 2, (name, layout)   # 情境測試分頁沒有用 .grid
+        assert layout["overflow"] <= 0, (name, layout)
+
+
+def test_phone_overview_without_ups_temperature(page):
+    """很多 UPS 不回報溫度，這時輸出磚會加寬。曾經因為那條規則的權重較高，把手機版面撐成 12 欄。"""
+    def without_temperature(route):
+        response = route.fetch()
+        data = response.json()
+        data["ups"]["temperature"] = None
+        data["ups"]["variables"]["ups.model"] = "CP1000PFCLCDa"
+        route.fulfill(response=response, json=data)
+
+    page.route("**/api/stream*", lambda route: route.abort())   # 固定在改過的那份狀態
+    page.route("**/api/state", without_temperature)
+    page.set_viewport_size(PHONE)
+    page.goto("/#/overview")
+    expect(page.locator(".v-overview .mini.out.wide")).to_be_visible()
+    expect(page.locator(".v-overview .mini.temp")).to_have_count(0)
+    layout = page.evaluate(LAYOUT)
+    assert max(layout["columns"]) <= 2 and layout["overflow"] <= 0, layout
+    hero = page.locator(".v-overview .hero").bounding_box()
+    grid = page.locator(".v-overview").bounding_box()
+    assert hero["width"] == grid["width"]
+    # 數字和電池圖不能互相重疊
+    number = page.get_by_test_id("battery").bounding_box()
+    cell = page.locator(".v-overview .cell").bounding_box()
+    assert number["x"] + number["width"] <= cell["x"]
+
+
+def test_desktop_overview_uses_the_twelve_column_grid(page):
+    page.goto("/#/overview")
+    expect(page.locator(".v-overview .hero")).to_be_visible()
+    assert page.evaluate(LAYOUT)["columns"][0] == 12
+    hero = page.locator(".v-overview .hero").bounding_box()
+    load = page.locator(".v-overview .load").bounding_box()
+    assert hero["y"] == load["y"] and hero["x"] + hero["width"] < load["x"]

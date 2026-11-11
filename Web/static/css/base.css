@@ -276,14 +276,18 @@ p {
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 16px;
 }
-.span-3 { grid-column: span 3; }
-.span-4 { grid-column: span 4; }
-.span-5 { grid-column: span 5; }
-.span-6 { grid-column: span 6; }
-.span-7 { grid-column: span 7; }
-.span-8 { grid-column: span 8; }
-.span-9 { grid-column: span 9; }
-.span-12 { grid-column: 1 / -1; }
+/* 磚塊在 12 欄裡的位置一律只在寬螢幕設定（各頁的 css 也一樣，寫在 @media (min-width: 1101px) 裡）。
+   窄螢幕下 .grid 的每個子元素都佔滿一列，這樣不需要靠覆寫，也不會被權重較高的規則蓋回來。 */
+@media (min-width: 1101px) {
+  .span-3 { grid-column: span 3; }
+  .span-4 { grid-column: span 4; }
+  .span-5 { grid-column: span 5; }
+  .span-6 { grid-column: span 6; }
+  .span-7 { grid-column: span 7; }
+  .span-8 { grid-column: span 8; }
+  .span-9 { grid-column: span 9; }
+  .span-12 { grid-column: 1 / -1; }
+}
 
 .tile {
   position: relative;
