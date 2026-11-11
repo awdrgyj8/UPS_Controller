@@ -229,8 +229,12 @@
   }
 
   /* ---------- 模擬器 ---------- */
+  @media (min-width: 1101px) {
+    .mains {
+      grid-row: span 2;
+    }
+  }
   .mains {
-    grid-row: span 2;
     min-height: 380px;
     gap: 14px;
     transition: background 0.5s;
